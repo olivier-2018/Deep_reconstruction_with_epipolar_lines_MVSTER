@@ -1,4 +1,6 @@
+outputs*/
 outputs/
+outputs_OBSOLETE/
 checkpoints/
 debug_figs/
 *__pycache__
