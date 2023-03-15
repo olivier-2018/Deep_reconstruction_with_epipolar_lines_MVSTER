@@ -91,10 +91,9 @@ def schedule_range(cur_depth, ndepth, depth_inteval_pixel, H, W):
     #return depth_range_values: (B, D, H, W)
     cur_depth_min = (cur_depth - ndepth / 2 * depth_inteval_pixel[:,None,None])  # (B, H, W)
     cur_depth_max = (cur_depth + ndepth / 2 * depth_inteval_pixel[:,None,None])
-    new_interval = (cur_depth_max - cur_depth_min) / (ndepth - 1)  # (B, H, W)
+    new_interval = (cur_depth_max - cur_depth_min) / (ndepth.device - 1)  # (B, H, W)
 
-    depth_range_samples = cur_depth_min.unsqueeze(1) + (torch.arange(0, ndepth, device=cur_depth.device, dtype=cur_depth.dtype,
-                                                                  requires_grad=False).reshape(1, -1, 1, 1) * new_interval.unsqueeze(1))
+    depth_range_samples = cur_depth_min.unsqueeze(1) + (torch.arange(0, ndepth, device=cur_depth.device, dtype=cur_depth.dtype,requires_grad=False).reshape(1, -1, 1, 1) * new_interval.unsqueeze(1))
     depth_range_samples = F.interpolate(depth_range_samples.unsqueeze(1), [ndepth, H, W], mode='trilinear', align_corners=True).squeeze(1)
     return depth_range_samples
 
@@ -831,8 +830,11 @@ class FullImageEncoder(nn.Module):
         return x5
 
 class mono_depth_decoder(nn.Module):
-
-    def __init__(self):
+    
+#  performs a 2D conv on a lower stage features, scale up by factor 2, concat with features of the upper stage, 
+#     then performs a 2Dconv on the concatenated features and pass it through a sigmoid to calculate disparity
+#  the inverse disparity is then scaled between min/max depth 
+    def __init__(self, mono_stg_itrpl):
         super(mono_depth_decoder, self).__init__()
         self.convblocks = nn.ModuleList(
             [Conv2d(64, 32, 3, 1, padding=1),
@@ -845,26 +847,40 @@ class mono_depth_decoder(nn.Module):
             nn.Conv2d(16, 1, 3, 1, 1)]
         )
         self.sigmoid = nn.Sigmoid()
+        self.interpol = mono_stg_itrpl
+        print("self.interpol =", self.interpol)
 
-    def forward(self, outputs, d_min, d_max):
+    def forward(self, outputs, d_min, d_max, debug = 0):
         """
         d_max: B
         """
         for i in range(1,4):  # 1 2 3
-            mono_small_feat = outputs['stage{}'.format(i)]['mono_feat']
-            mono_large_feat = outputs['stage{}'.format(i+1)]['mono_feat']
+            mono_small_feat = outputs['stage{}'.format(i)]['mono_feat']    # stg1: torch.Size([1, 64, 64, 80])
+            mono_large_feat = outputs['stage{}'.format(i+1)]['mono_feat']  # stg1: torch.Size([1, 32, 128, 160])
 
-            mono_small_feat = self.convblocks[i-1](mono_small_feat)
-            mono_small_feat = F.interpolate(mono_small_feat, scale_factor=2, mode="nearest")
+            mono_small_feat = self.convblocks[i-1](mono_small_feat) # stg1: torch.Size([1, 64, 64, 80])
+            # mono_small_feat = F.interpolate(mono_small_feat, scale_factor=2, mode="nearest") # stg1: torch.Size([1, 32, 128, 160])
+            mono_small_feat = F.interpolate(mono_small_feat, scale_factor=2, mode=self.interpol) # stg1: torch.Size([1, 32, 128, 160])
 
-            mono_feat = self.conv3x3[i-1](torch.cat([mono_small_feat, mono_large_feat], 1))  # B C H W
+            mono_feat = self.conv3x3[i-1](torch.cat([mono_small_feat, mono_large_feat], 1))  # B C H W 
 
             disp = self.sigmoid(mono_feat)
             min_disp = (1 / d_max)[:,None,None,None]  # B 1 1 1
             max_disp = (1 / d_min)[:,None,None,None]
             scaled_disp = min_disp + (max_disp - min_disp) * disp
-            depth = 1 / scaled_disp
+            depth = 1 / scaled_disp                   # [B, 1, W, H] torch.Size([1, 1, 128, 160])
             outputs['stage{}'.format(i+1)]['mono_depth'] = depth.squeeze(1)
+            
+            if debug > 2: # TODO
+                import cv2
+                # plot stages mono depth                
+                stg = 'stage{}'.format(i)
+                print (f"[DEBUG]mvs4net_utils.py,mono_depth_decode,fwd: {stg}")
+                img2plot = depth[0].squeeze().cpu().detach().numpy()
+                cv2.imshow(f"mono feature {stg}", img2plot/np.max(img2plot))
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+            
         return outputs
 
 class reg2d(nn.Module):
@@ -1034,7 +1050,7 @@ class stagenet(nn.Module):
             ref_proj_new = ref_proj[:, 0].clone()
             ref_proj_new[:, :3, :4] = torch.matmul(ref_proj[:, 1, :3, :3], ref_proj[:, 0, :3, :4])
             warped_src = homo_warping(src_fea, src_proj_new, ref_proj_new, depth_hypo, self.vis_ETA, save_fn)  # B C D H W
-            if group_cor:
+            if group_cor: 
                 warped_src = warped_src.reshape(B, group_cor_dim, C//group_cor_dim, D, H, W)
                 ref_volume = ref_volume.reshape(B, group_cor_dim, C//group_cor_dim, D, H, W)
                 cor_feat = (warped_src * ref_volume).mean(2)  # B G D H W
@@ -1054,6 +1070,7 @@ class stagenet(nn.Module):
                 cor_weight_sum += cor_weight  # B D H W
                 cor_feats += cor_weight.unsqueeze(1) * cor_feat  # B C D H W
             del cor_weight, cor_feat
+            
         if not self.attn_fuse_d:
             cor_feats = cor_feats / cor_weight_sum.unsqueeze(1).unsqueeze(1)  # B C D H W
         else:
@@ -1061,7 +1078,6 @@ class stagenet(nn.Module):
 
         del cor_weight_sum, src_features
         
-    
         # step 3. regularization
         attn_weight = regnet(cor_feats)  # B D H W
         del cor_feats

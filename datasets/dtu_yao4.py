@@ -19,6 +19,11 @@ class MVSDataset(Dataset):
         self.rt = kwargs.get("rt", False)
         self.use_raw_train = kwargs.get("use_raw_train", False)
         self.color_augment = transforms.ColorJitter(brightness=0.5, contrast=0.5)
+        self.pair_fname = kwargs.get("pair_fname", "pair.txt")
+        self.lightings = kwargs.get("lightings", 7)
+        self.debug = kwargs.get("debug", False)
+        
+        print ("[MVSDataset] INIT: pair file: ", self.pair_fname)
 
         assert self.mode in ["train", "val", "test"]
         self.metas = self.build_list()
@@ -32,6 +37,10 @@ class MVSDataset(Dataset):
         # scans
         for scan in scans:
             pair_file = "Cameras/pair.txt"
+            
+            if self.debug:
+                print ("[MVSDataset] BUILD_LIST: Pair file used: ", pair_file)
+                
             # read the pair file
             with open(os.path.join(self.datapath, pair_file)) as f:
                 num_viewpoint = int(f.readline())
@@ -51,7 +60,7 @@ class MVSDataset(Dataset):
     def read_cam_file(self, filename):
         with open(filename) as f:
             lines = f.readlines()
-            lines = [line.rstrip() for line in lines]
+            lines = [line.rstrip() for line in lines]            
         # extrinsics: line [1,5), 4x4 matrix
         extrinsics = np.fromstring(' '.join(lines[1:5]), dtype=np.float32, sep=' ').reshape((4, 4))
         # intrinsics: line [7-10), 3x3 matrix
@@ -108,7 +117,8 @@ class MVSDataset(Dataset):
     def read_depth_hr(self, filename, scale):
         # read pfm depth file
         #w1600-h1200-> 800-600 ; crop -> 640, 512; downsample 1/4 -> 160, 128
-        depth_hr = np.array(read_pfm(filename)[0], dtype=np.float32) * scale
+        depth_tmp = read_pfm(filename)[0]
+        depth_hr = np.array(depth_tmp, dtype=np.float32) * scale
         depth_lr = self.prepare_img(depth_hr)
 
         h, w = depth_lr.shape
@@ -121,10 +131,11 @@ class MVSDataset(Dataset):
         return depth_lr_ms
 
     def __getitem__(self, idx):
+        
         meta = self.metas[idx]
         scan, light_idx, ref_view, src_views = meta
-        # use only the reference view and first nviews-1 source views
-
+        
+        # use only the reference view and first nviews-1 source views        
         if self.mode == 'train' and self.rt:
             num_src_views = len(src_views)
             index = random.sample(range(num_src_views), self.nviews - 1)
@@ -133,32 +144,64 @@ class MVSDataset(Dataset):
         else:
             view_ids = [ref_view] + src_views[:self.nviews - 1]
             scale = 1
+            
         imgs = []
         mask = None
         depth_values = None
         proj_matrices = []
         for i, vid in enumerate(view_ids):
+            
+            if self.debug:
+                print("[MVSDataset] GET_ITEM: idx=",i)
+                
             # NOTE that the id in image file names is from 1 to 49 (not 0~48)
             if not self.use_raw_train:
                 img_filename = os.path.join(self.datapath, 'Rectified/{}_train/rect_{:0>3}_{}_r5000.png'.format(scan, vid + 1, light_idx))
             else:
                 img_filename = os.path.join(self.datapath, 'Rectified_raw/{}/rect_{:0>3}_{}_r5000.png'.format(scan, vid + 1, light_idx))
+                
             mask_filename_hr = os.path.join(self.datapath, 'Depths_raw/{}/depth_visual_{:0>4}.png'.format(scan, vid))
             depth_filename_hr = os.path.join(self.datapath, 'Depths_raw/{}/depth_map_{:0>4}.pfm'.format(scan, vid))
-            proj_mat_filename = os.path.join(self.datapath, 'Cameras/train/{:0>8}_cam.txt').format(vid)
+            
+            # proj_mat_filename = os.path.join(self.datapath, 'Cameras/train/{:0>8}_cam.txt').format(vid)
+            proj_mat_filename = os.path.join(self.datapath, 'Cameras/{:0>8}_cam.txt').format(vid)
+            
+            if self.debug:
+                print("[MVSDataset] GET_ITEM: filenames:")
+                print (img_filename)
+                print (mask_filename_hr)
+                print (depth_filename_hr)
+                print (proj_mat_filename)
+            
             img = self.read_img(img_filename)
+            if self.debug:
+                print("[MVSDataset] GET_ITEM: img raw size:", img.shape)
             if self.use_raw_train:
                 img = self.crop_img(img)
+                if self.debug:
+                    print("[MVSDataset] GET_ITEM: (use_raw_train) cropped img size:", img.shape)
+           
+            # Read camera parameters
             intrinsics, extrinsics, depth_min, depth_interval = self.read_cam_file(proj_mat_filename)
+            if self.debug:
+                print("[MVSDataset] GET_ITEM: intrinsics:", intrinsics[0,:])
+
+            # Adjust extrinsics translation vector if robust training  
             if self.rt:
-                extrinsics[:3,3] *= scale
+                extrinsics[:3,3] *= scale # translation vector scaled with robust trianing random scale
+                
             if self.use_raw_train:
                 intrinsics[:2, :] *= 2.0
+                if self.debug:
+                    print("[MVSDataset] GET_ITEM: (use_raw_train) intrinsics:", intrinsics[0,:])
 
             if i == 0:
-
+                # Read depth & mask
                 mask_read_ms = self.read_mask_hr(mask_filename_hr)
                 depth_ms = self.read_depth_hr(depth_filename_hr, scale)
+                if self.debug:
+                    print("[MVSDataset] GET_ITEM: mask:", mask_read_ms["stage4"].shape)
+                    print("[MVSDataset] GET_ITEM: depth:", depth_ms["stage4"].shape)
                 #get depth values
                 depth_max = depth_interval * self.ndepths + depth_min
                 depth_values = np.array([depth_min * scale, depth_max * scale], dtype=np.float32)
@@ -169,6 +212,9 @@ class MVSDataset(Dataset):
             proj_mat[1, :3, :3] = intrinsics
             proj_matrices.append(proj_mat)
             imgs.append(img.transpose(2,0,1))
+            
+            if self.debug:
+                print("[MVSDataset] GET_ITEM: proj_mat:\n", proj_mat)
 
         #all
         # imgs = np.stack(imgs).transpose([0, 3, 1, 2])
@@ -187,9 +233,12 @@ class MVSDataset(Dataset):
             "stage3": stage3_pjmats,
             "stage4": stage4_pjmats
         }
-
-        return {"imgs": imgs,  # Nv C H W
-                "proj_matrices": proj_matrices_ms,  # 4 stage of Nv 2 4 4
-                "depth": depth_ms,
-                "depth_values": depth_values,
-                "mask": mask }
+        if self.debug:
+            print("[MVSDataset] GET_ITEM: proj_matrices_ms stg4:\n", proj_matrices_ms["stage4"].shape)
+            
+        return {"imgs": imgs,                       # list of imgs: (Nv C H W)
+                "proj_matrices": proj_matrices_ms,  # dict: 4 stages of (Nv 2 4 4)
+                "depth": depth_ms,                  # dict: 4 stages of (H W)
+                "depth_values": depth_values,       # array
+                "mask": mask }                      # dict: 4 stages of (H W)
+        

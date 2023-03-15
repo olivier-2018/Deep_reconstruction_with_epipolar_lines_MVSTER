@@ -143,6 +143,10 @@ def Thres_metrics(depth_est, depth_gt, mask, thres):
     depth_est, depth_gt = depth_est[mask], depth_gt[mask]
     errors = torch.abs(depth_est - depth_gt)
     err_mask = errors > thres
+    # import cv2
+    # cv2.imshow("depth", depth_est.cpu().detach().numpy()-depth_gt.cpu().detach().numpy())
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
     return torch.mean(err_mask.float())
 
 
