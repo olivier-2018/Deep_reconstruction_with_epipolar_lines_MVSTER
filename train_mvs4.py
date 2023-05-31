@@ -86,11 +86,11 @@ parser.add_argument('--ASFF', action='store_true')
 parser.add_argument('--attn_temp', type=float, default=2)
 
 parser.add_argument('--debug', type=int, default=0, help='powers of 2 for switches selection (debug = 2⁰+2¹+2³+2⁴+...) with '
-                    '0:  features (add 1) '
-                    '1:  (add 2) '
-                    '2:  (add 4) '
-                    '3:  (add 8) '
-                    '4:  (add 16) '
+                    '0: plot input images & FPN4 features (add 1) '
+                    '1: plot depth (add 2) '
+                    '2: plot depth hpothesis (add 4) '
+                    '3: plot attention weights (add 8) '
+                    '4: plot mono depths (add 16) '
                     '5:  (add 32) '
                     '63: ALL')
 

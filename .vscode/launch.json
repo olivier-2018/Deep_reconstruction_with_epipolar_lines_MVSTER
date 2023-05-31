@@ -16,6 +16,9 @@
                 "--trainpath","data/DTU/mvs_training",
                 "--trainlist","lists/dtu/train.txt",
                 "--testlist","lists/dtu/test.txt",
+                // "--loadckpt", "outputs/DTU_512x640_Nviews5_v2/model_21.ckpt", 
+                "--train_nviews", "2",
+                "--test_nviews", "2",
                 "--lightings","7",
                 "--pair_fname","pair.txt",
                 "--logdir","./outputs/debug/trainDTU",
@@ -31,12 +34,13 @@
                 "--fpn_base_channel","8",
                 "--l1ce_lw","0.003,1",
                 "--lrepochs","4,6,8,9,10,11,12,13,14,16:2",
-                "--batch_size", "6",
+                "--batch_size", "1",
                 "--summary_freq","1",
                 "--mono", 
                 "--inverse_depth",
                 "--attn_temp", "2",
-                "--debug", "1"  
+                "--seed", "126",
+                "--debug", "16"   // 1:img+feats, 2: depths, 4:hypos, 8:attn_weights, 16:mono_depth
             ]
         },
         {

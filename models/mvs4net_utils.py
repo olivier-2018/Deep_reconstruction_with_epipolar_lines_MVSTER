@@ -9,6 +9,14 @@ except:
     pass
 import math
 import numpy as np
+import cv2
+
+
+def get_powers(n):
+    return [str(p) for p,v in enumerate(bin(n)[:1:-1]) if int(v)]
+
+def NormalizeNumpy(data):
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
 
 def homo_warping(src_fea, src_proj, ref_proj, depth_values, vis_ETA=False, fn=None):
     # src_fea: [B, C, H, W]
@@ -831,7 +839,7 @@ class FullImageEncoder(nn.Module):
 
 class mono_depth_decoder(nn.Module):
     
-#  performs a 2D conv on a lower stage features, scale up by factor 2, concat with features of the upper stage, 
+#  for stage 1 to 3, performs 2D conv on current stage features, scale up by factor 2, concat with features of upper stage, 
 #     then performs a 2Dconv on the concatenated features and pass it through a sigmoid to calculate disparity
 #  the inverse disparity is then scaled between min/max depth 
     def __init__(self, mono_stg_itrpl):
@@ -858,28 +866,18 @@ class mono_depth_decoder(nn.Module):
             mono_small_feat = outputs['stage{}'.format(i)]['mono_feat']    # stg1: torch.Size([1, 64, 64, 80])
             mono_large_feat = outputs['stage{}'.format(i+1)]['mono_feat']  # stg1: torch.Size([1, 32, 128, 160])
 
-            mono_small_feat = self.convblocks[i-1](mono_small_feat) # stg1: torch.Size([1, 64, 64, 80])
+            mono_small_feat = self.convblocks[i-1](mono_small_feat) # stg1: [1, 64, 64, 80] --> [1, 32, 64, 80]
             # mono_small_feat = F.interpolate(mono_small_feat, scale_factor=2, mode="nearest") # stg1: torch.Size([1, 32, 128, 160])
-            mono_small_feat = F.interpolate(mono_small_feat, scale_factor=2, mode=self.interpol) # stg1: torch.Size([1, 32, 128, 160])
+            mono_small_feat = F.interpolate(mono_small_feat, scale_factor=2, mode=self.interpol) # stg1: [1, 32, 64, 80] --> [1, 32, 128, 160]
 
-            mono_feat = self.conv3x3[i-1](torch.cat([mono_small_feat, mono_large_feat], 1))  # B C H W 
+            mono_feat = self.conv3x3[i-1](torch.cat([mono_small_feat, mono_large_feat], 1))  # B C H W  torch.Size([1, 1, 128, 160])
 
-            disp = self.sigmoid(mono_feat)
-            min_disp = (1 / d_max)[:,None,None,None]  # B 1 1 1
-            max_disp = (1 / d_min)[:,None,None,None]
+            disp = self.sigmoid(mono_feat)  # torch.Size([1, 1, 128, 160])
+            min_disp = (1 / d_max)[:,None,None,None]  # (B 1 1 1) "scalars"
+            max_disp = (1 / d_min)[:,None,None,None]  # (B 1 1 1) "scalars"
             scaled_disp = min_disp + (max_disp - min_disp) * disp
             depth = 1 / scaled_disp                   # [B, 1, W, H] torch.Size([1, 1, 128, 160])
-            outputs['stage{}'.format(i+1)]['mono_depth'] = depth.squeeze(1)
-            
-            if debug > 2: # TODO
-                import cv2
-                # plot stages mono depth                
-                stg = 'stage{}'.format(i)
-                print (f"[DEBUG]mvs4net_utils.py,mono_depth_decode,fwd: {stg}")
-                img2plot = depth[0].squeeze().cpu().detach().numpy()
-                cv2.imshow(f"mono feature {stg}", img2plot/np.max(img2plot))
-                cv2.waitKey(0)
-                cv2.destroyAllWindows()
+            outputs['stage{}'.format(i+1)]['mono_depth'] = depth.squeeze(1) # torch.Size([1, 128, 160])
             
         return outputs
 
@@ -1017,58 +1015,83 @@ class PosEncLearned(nn.Module):
         return x
 
 class stagenet(nn.Module):
-    def __init__(self, inverse_depth=False, mono=False, attn_fuse_d=True, vis_ETA=False, attn_temp=1):
+    def __init__(self, inverse_depth=False, mono=False, attn_fuse_d=True, vis_ETA=False, attn_temp=1, debug=0):
         super(stagenet, self).__init__()
         self.inverse_depth = inverse_depth
         self.mono = mono
         self.attn_fuse_d = attn_fuse_d
         self.vis_ETA = vis_ETA
         self.attn_temp = attn_temp
+        self.debug = debug
 
     def forward(self, features, proj_matrices, depth_hypo, regnet, stage_idx, group_cor=False, group_cor_dim=8, split_itv=1, fn=None):
 
         # step 1. feature extraction
         proj_matrices = torch.unbind(proj_matrices, 1)
-        ref_feature, src_features = features[0], features[1:]
+        ref_feature, src_features = features[0], features[1:] 
         ref_proj, src_projs = proj_matrices[0], proj_matrices[1:]
         B,D,H,W = depth_hypo.shape
-        C = ref_feature.shape[1]
+        C =  ref_feature.shape[1]   # number of features
 
-        ref_volume =  ref_feature.unsqueeze(2).repeat(1, 1, D, 1, 1)
+        ref_volume =  ref_feature.unsqueeze(2).repeat(1, 1, D, 1, 1) # (B,Feat,Depth_hyp,H,W)
         cor_weight_sum = 1e-8
         cor_feats = 0
         # step 2. Epipolar Transformer Aggregation
-        for src_idx, (src_fea, src_proj) in enumerate(zip(src_features, src_projs)):
+        for src_idx, (src_fea, src_proj) in enumerate(zip(src_features, src_projs)):   # src_features: (B,F,H,W), src_projs: (B,2,4,4)
             if self.vis_ETA:
                 scan_name = fn[0].split('/')[0]
                 image_name = fn[0].split('/')[2][:-2]
                 save_fn = './debug_figs/vis_ETA/{}_stage{}_src{}'.format(scan_name+'_'+image_name, stage_idx, src_idx)
             else:
                 save_fn = None
-            src_proj_new = src_proj[:, 0].clone()
-            src_proj_new[:, :3, :4] = torch.matmul(src_proj[:, 1, :3, :3], src_proj[:, 0, :3, :4])
-            ref_proj_new = ref_proj[:, 0].clone()
+            src_proj_new = src_proj[:, 0].clone()  # extrinsics src view
+            src_proj_new[:, :3, :4] = torch.matmul(src_proj[:, 1, :3, :3], src_proj[:, 0, :3, :4]) # intrinsics * extrinsics
+            ref_proj_new = ref_proj[:, 0].clone()  # extrinsics ref view
             ref_proj_new[:, :3, :4] = torch.matmul(ref_proj[:, 1, :3, :3], ref_proj[:, 0, :3, :4])
             warped_src = homo_warping(src_fea, src_proj_new, ref_proj_new, depth_hypo, self.vis_ETA, save_fn)  # B C D H W
+            
+            # DEBUG - plot warped views
+            if "14" in get_powers(self.debug): 
+                feat_ = warped_src[0]  # only 1st in batch
+                Nfeat, Ndepth = feat_.shape[:2] 
+                for feat in range(0,Nfeat,Nfeat//8):   # Sweep through features
+                    for dep in range(0,Ndepth):           # Sweep through depth hyps
+                        warp_img = feat_[feat,dep].detach().cpu().numpy() # (H,W)
+                        cv2.imshow(f"[WARPED] Feat{feat} Depth{dep}", NormalizeNumpy(warp_img))
+                    cv2.waitKey(0)
+                    cv2.destroyAllWindows()
+            # END DEBUG
+            
+            # Evaluate (group) correlated features
             if group_cor: 
                 warped_src = warped_src.reshape(B, group_cor_dim, C//group_cor_dim, D, H, W)
                 ref_volume = ref_volume.reshape(B, group_cor_dim, C//group_cor_dim, D, H, W)
-                cor_feat = (warped_src * ref_volume).mean(2)  # B G D H W
+                cor_feat = (warped_src * ref_volume).mean(2)  # B G D H W             Ex: (1, 8, 8, 64, 80)
             else:
                 cor_feat = (ref_volume - warped_src)**2 # B C D H W 
             del warped_src, src_proj, src_fea
             if self.vis_ETA:
                 vis_weight = torch.softmax(cor_feat.sum(1), 1).detach().cpu().numpy()
                 np.save(save_fn, vis_weight)
+                
 
             if not self.attn_fuse_d:
-                cor_weight = torch.softmax(cor_feat.sum(1), 1).max(1)[0]  # B H W
+                cor_weight = torch.softmax(cor_feat.sum(1), 1).max(1)[0]  # B H W (sum over FeatureGroups, softmax over Depths, keep max depths)
                 cor_weight_sum += cor_weight  # B H W
                 cor_feats += cor_weight.unsqueeze(1).unsqueeze(1) * cor_feat  # B C D H W
             else:
                 cor_weight = torch.softmax(cor_feat.sum(1) / self.attn_temp, 1) / math.sqrt(C)  # B D H W
                 cor_weight_sum += cor_weight  # B D H W
                 cor_feats += cor_weight.unsqueeze(1) * cor_feat  # B C D H W
+            
+            # DEBUG - plot correl weights (proba)
+            if "24" in get_powers(self.debug): 
+                cor_weight_img = cor_weight[0].detach().cpu().numpy() # only 1st in batch
+                for dep in range(cor_weight_img.shape[0]):
+                    cv2.imshow(f"[CORREL-WEIGHTS] depth:{dep}", NormalizeNumpy(cor_weight_img[dep]))
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+            # END DEBUG                
             del cor_weight, cor_feat
             
         if not self.attn_fuse_d:
@@ -1082,6 +1105,14 @@ class stagenet(nn.Module):
         attn_weight = regnet(cor_feats)  # B D H W
         del cor_feats
         attn_weight = F.softmax(attn_weight, dim=1)  # B D H W
+        # DEBUG - plot Attention weights (proba)
+        if "40" in get_powers(self.debug): 
+            attn_weight_img = attn_weight[0].detach().cpu().numpy() # only 1st in batch
+            for dep in range(attn_weight_img.shape[0]):
+                cv2.imshow(f"[ATTN-WEIGHTS] depth:{dep}", NormalizeNumpy(attn_weight_img[dep]))
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+        # END DEBUG          
 
         # step 4. depth argmax
         attn_max_indices = attn_weight.max(1, keepdim=True)[1]  # B 1 H W
@@ -1094,7 +1125,10 @@ class stagenet(nn.Module):
         else:
             photometric_confidence = torch.tensor(0.0, dtype=torch.float32, device=ref_feature.device, requires_grad=False)
         
-        ret_dict = {"depth": depth,  "photometric_confidence": photometric_confidence, "hypo_depth": depth_hypo, "attn_weight": attn_weight}
+        ret_dict = {"depth": depth,  
+                    "photometric_confidence": photometric_confidence, 
+                    "hypo_depth": depth_hypo, 
+                    "attn_weight": attn_weight}
         
         if self.inverse_depth:
             last_depth_itv = 1./depth_hypo[:,2,:,:] - 1./depth_hypo[:,1,:,:]

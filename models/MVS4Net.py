@@ -10,6 +10,9 @@ from models.mvs4net_utils import stagenet, reg2d, reg3d, FPN4, FPN4_convnext, FP
 def get_powers(n):
     return [str(p) for p,v in enumerate(bin(n)[:1:-1]) if int(v)]
 
+def NormalizeNumpy(data):
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
+
 class MVS4net(nn.Module):
     def __init__(self, arch_mode="fpn", reg_net='reg2d', num_stage=4, fpn_base_channel=8, 
                 reg_channel=8, stage_splits=[8,8,4,4], depth_interals_ratio=[0.5,0.5,0.5,1],
@@ -42,7 +45,7 @@ class MVS4net(nn.Module):
         if arch_mode == "fpn":
             self.feature = FPN4(base_channels=fpn_base_channel, gn=False, dcn=dcn)
         self.vis_stg_features = vis_stg_features
-        self.stagenet = stagenet(inverse_depth, mono, attn_fuse_d, vis_ETA, attn_temp)
+        self.stagenet = stagenet(inverse_depth, mono, attn_fuse_d, vis_ETA, attn_temp, debug=debug)
         self.stage_splits = stage_splits
         self.reg = nn.ModuleList()
         self.pos_enc = pos_enc
@@ -76,16 +79,17 @@ class MVS4net(nn.Module):
             img = imgs[nview_idx]           # img is a dict with 4 keys (stg1-4) which contains a tensor [B, Filter, Hstg, Wstg]
             features.append(self.feature(img)) # self.feature was extracted by FPN4. self.feature is a dict with keys: "stage1", "stage2", etc. 
                                                 # stage1= (1, 64, 64, 80)... stg1, 2, 3 & 4 have 64, 32, 16 & 8 filters respectively (base channel is 8 by default)
+                                                # Features are non-dim between -1 and 1
                                                 
-            # DEBUG - plot features
-            if "0" in get_powers(self.debug): # add 1
-                
-                for stg in features[nview_idx].keys():   # Sweep through each stage                    
+            # DEBUG - plot input image and features for each stage
+            if "0" in get_powers(self.debug): # add 1                
+                for stg in features[nview_idx].keys():   # Sweep through each stage    
+                    cv2.imshow(f"[IMG] {stg}", cv2.cvtColor(img[0].permute(1,2,0).detach().cpu().numpy(), cv2.COLOR_BGR2RGB) ) 
                     Nfeature = features[nview_idx][stg].shape[1]
                     # print(f"[DEBUG] {stg} filters: {Nfeature}")
                     for feat_idx in range(0,Nfeature , Nfeature//8): # Sweep through features
                         feat_img = features[nview_idx][stg][0,feat_idx].detach().cpu().numpy() # (H,W), only use 1st from batch
-                        cv2.imshow(f"[FEAT] View:{nview_idx} {stg} Filt:{feat_idx}", feat_img)
+                        cv2.imshow(f"[FEAT] View:{nview_idx} {stg} Filt:{feat_idx}", NormalizeNumpy(feat_img))
                     cv2.waitKey(0)
                     cv2.destroyAllWindows()
             # END DEBUG
@@ -113,10 +117,6 @@ class MVS4net(nn.Module):
                 else:
                     depth_hypo = schedule_range(outputs_stage['depth'].detach(), self.stage_splits[stage_idx], self.depth_interals_ratio[stage_idx] * depth_interval, H, W)
             
-            
-            # print("STAGE {} INIT depth_hypo: Min {}, Max {}".format(stage_idx,
-            #                                                         torch.amin(torch.amin(torch.amin(depth_hypo,1,True),2,True),3,True).flatten().cpu().numpy(), 
-            #                                                         torch.amax(torch.amax(torch.amax(depth_hypo,1,True),2,True),3,True).flatten().cpu().numpy() ) )
 
             outputs_stage = self.stagenet(features_stage, proj_matrices_stage, depth_hypo=depth_hypo, regnet=self.reg[stage_idx], stage_idx=stage_idx,
                                         group_cor=self.group_cor, group_cor_dim=self.group_cor_dim[stage_idx],
@@ -129,29 +129,70 @@ class MVS4net(nn.Module):
                 # 'attn_weight': torch.Size([6, 8, 64, 80])
                 # 'inverse_min_depth': torch.Size([6, 64, 80])
                 # 'inverse_max_depth':torch.Size([6, 64, 80])
-                # 'mono_feat': torch.Size([6, 64, 64, 80])
+                # 'mono_feat': torch.Size([6, 64, 64, 80])  # those are simply the ref view features
                 # len(): 7
 
-            # outputs_stage_d = outputs_stage['depth']
-            # print("ESTIM depth: ",outputs_stage_d.shape) # B,stgH,stgW            
-            # print ("MIN ESTIM depth: ",torch.amin(torch.amin(outputs_stage_d,2,True),1,True).flatten().cpu().numpy() )
-            # print ("MAX ESTIM depth: ",torch.amax(torch.amax(outputs_stage_d,2,True),1,True).flatten().cpu().numpy() )
+            stg = "stage{}".format(stage_idx + 1)
+            outputs[stg] = outputs_stage
+        
             
-
-            outputs["stage{}".format(stage_idx + 1)] = outputs_stage
+            # DEBUG - plot depth
+            if "1" in get_powers(self.debug): # add 2   
+                feat_img = outputs[stg]["depth"][0].detach().cpu().numpy()  # only first in batch
+                cv2.imshow(f"[DEPTH] {stg}", NormalizeNumpy(feat_img) )
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()  
+            # END DEBUG 
             
-            outputs.update(outputs_stage) # CHECK: required during training?
+            # DEBUG - plot hypo_depth
+            if "2" in get_powers(self.debug): # add 4                    
+                feat_ = outputs[stg]["hypo_depth"][0].detach().cpu().numpy()  # only first in batch
+                u,v = feat_[0].shape[0]//2, feat_[0].shape[1]//2  # get middle point
+                N = feat_.shape[0]
+                print(f"[DEPTH HYPO] {stg} Point:{(u,v)} PTmean {np.mean(feat_[:,u,v])} PTmin {np.min(feat_[:,u,v])}, Max {np.max(feat_[:,u,v])}")
+                for feat_idx in range(0, N):   # Sweep through ALL depth hyp : [8,8,4,4] by defaults
+                    feat_img = feat_[feat_idx].copy()
+                    feat_img = cv2.circle(feat_img, (v,u), 1, (0,0,0), 2)                            
+                    cv2.imshow(f"[DEPTH HYPO] {stg} Filt:{feat_idx}", (feat_img - np.min(feat_)) / (np.max(feat_)-np.min(feat_)) )
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+            # END DEBUG 
+            
+            # DEBUG - plot attn_weight
+            if "3" in get_powers(self.debug): # add 8                    
+                feat_ = outputs[stg]["attn_weight"][0].detach().cpu().numpy()  # only first in batch
+                u,v = feat_[0].shape[0]//2, feat_[0].shape[1]//2  # get middle point
+                N = feat_.shape[0]
+                print(f"[ATTN] {stg} Point:{(u,v)} PTmean {np.mean(feat_[:,u,v])} PTmin {np.min(feat_[:,u,v])}, Max {np.max(feat_[:,u,v])}")
+                for feat_idx in range(0, N):   # Sweep through ALL depth hyp : [8,8,4,4] by defaults
+                    feat_img = feat_[feat_idx].copy()
+                    print(f"[ATTN] {stg} Filt{feat_idx} mean {np.mean(feat_img)} min {np.min(feat_img)}, Max {np.max(feat_img)}")
+                    cv2.imshow(f"[ATTN WEIGHT] {stg} Hyp:{feat_idx}", feat_img )
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+            # END DEBUG 
+        
+        # get stage4 outputs in outputs
+        outputs.update(outputs_stage) # CHECK: adds outputs_stage keys to outputs dictionnary ??? required during training?
         
         if self.mono and self.training:
         # if self.mono:
             outputs = self.mono_depth_decoder(outputs, depth_values[:,0], depth_values[:,1], self.debug)  # INFO; depth_values has only 2 depth values (min & max)   (batch,2) with len(D)=2 
+            stages = [stg for stg in outputs.keys() if stg[:5]=="stage"]
+            # INFO
+            # dict_keys(['stage1', 'depth', 'photometric_confidence', 'hypo_depth', 'attn_weight', 'inverse_min_depth', 'inverse_max_depth', 'mono_feat', 'stage2', 'stage3', 'stage4'])
+            # each stage: dict_keys(['depth', 'photometric_confidence', 'hypo_depth', 'attn_weight', 'inverse_min_depth', 'inverse_max_depth', 'mono_feat'])
+            #
             
-            if self.debug > 1: # TODO
-                print (f"[DEBUG]mvs4Net.py, mono_depth, stage4")
-                img2plot = outputs["stage4"]["mono_depth"][0].squeeze().cpu().detach().numpy()
-                cv2.imshow(f"[DEBUG]mono feature stage4", img2plot/np.max(img2plot))
+            # DEBUG - plot Mono depth
+            if "4" in get_powers(self.debug): # add 16
+                for stg in stages[1:]:   # Sweep through each stage     
+                    feat_img = outputs[stg]["mono_depth"][0]  # only first in batch
+                    cv2.imshow(f"[MONODEPTH] {stg}", NormalizeNumpy(feat_img.detach().cpu().numpy()))
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
+            # END DEBUG             
+
         return outputs
 
 def MVS4net_loss(inputs, depth_gt_ms, mask_ms, **kwargs):
