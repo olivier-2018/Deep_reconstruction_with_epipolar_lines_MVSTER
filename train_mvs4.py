@@ -26,6 +26,7 @@ parser.add_argument('--trainlist', help='train list')
 parser.add_argument('--testlist', help='test list')
 parser.add_argument('--pair_fname', default='pair.txt', help='view pair combination filename')
 parser.add_argument('--train_nviews', type=int, default=5, help='number of source views to use during training')
+parser.add_argument('--test_nviews', type=int, default=5, help='number of source views to use during testing')
 parser.add_argument('--lightings', type=int, default=7, help='number of light sources in dataset (if positive: iterate on multiple lights, if negative: single light with specified value, if null: single light w value 3)')
 
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train')
@@ -37,9 +38,9 @@ parser.add_argument('--batch_size', type=int, default=1, help='train batch size'
 parser.add_argument('--interval_scale', type=float, default=1.06, help='the number of depth values')
 
 parser.add_argument('--loadckpt', default=None, help='load a specific checkpoint')
-parser.add_argument('--logdir', default='./checkpoints/debug', help='the directory to save checkpoints/logs')
+parser.add_argument('--logdir', default='./outputs/debug', help='the directory to save checkpoints/logs')
 parser.add_argument('--resume', action='store_true', help='continue to train the model')
-parser.add_argument('--debug', type=int, default=0, help='debug lvl0: text, lvl1: images, ...')
+
 
 parser.add_argument('--summary_freq', type=int, default=50, help='print and summary frequency')
 parser.add_argument('--save_freq', type=int, default=1, help='save checkpoint frequency')
@@ -84,12 +85,28 @@ parser.add_argument('--lr_scheduler', type=str, default='MS')
 parser.add_argument('--ASFF', action='store_true')
 parser.add_argument('--attn_temp', type=float, default=2)
 
+parser.add_argument('--debug', type=int, default=0, help='powers of 2 for switches selection (debug = 2⁰+2¹+2³+2⁴+...) with '
+                    '0:  features (add 1) '
+                    '1:  (add 2) '
+                    '2:  (add 4) '
+                    '3:  (add 8) '
+                    '4:  (add 16) '
+                    '5:  (add 32) '
+                    '63: ALL')
 
+
+# Init CUDA
 # num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
-
 num_gpus = torch.cuda.device_count()
 print("Number of GPUs detected: ",num_gpus)
 is_distributed = num_gpus > 1
+
+
+# multi-debug function
+####################### 
+def get_powers(n):
+    return [str(p) for p,v in enumerate(bin(n)[:1:-1]) if int(v)]
+
 
 
 # main function
@@ -113,17 +130,22 @@ def train(model, model_loss, optimizer, TrainImgLoader, TestImgLoader, start_epo
     elif args.lr_scheduler == 'exponent':
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma = 0.17, verbose=True) # Multiplicative factor of learning rate
 
+
     for epoch_idx in range(start_epoch, args.epochs):
         print('Epoch {}:'.format(epoch_idx))
         global_step = len(TrainImgLoader) * epoch_idx
 
         # training
         for batch_idx, sample in enumerate(TrainImgLoader):
+            
+            # Init
             start_time = time.time()
             global_step = len(TrainImgLoader) * epoch_idx + batch_idx 
+            
             # global_step = (len(TrainImgLoader) + len(TestImgLoader)) * epoch_idx + batch_idx 
             do_summary = global_step % args.summary_freq == 0
-            # TRAIN
+            
+            # FWD PASS
             loss, scalar_outputs, image_outputs = train_sample(model, model_loss, optimizer, sample, args)
             
             # STEP LR
@@ -352,6 +374,7 @@ def test_sample_depth(model, model_loss, sample, args):
 #################################################################################################################################
 
 if __name__ == '__main__':
+    
     # parse arguments and check
     args = parser.parse_args()
 
@@ -463,14 +486,14 @@ if __name__ == '__main__':
     MVSDataset = find_dataset_def(args.dataset)
     
     if args.dataset.startswith('dtu'):
-        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", 5, args.interval_scale, rt=args.rt,  use_raw_train=args.use_raw_train,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
-        test_dataset = MVSDataset(args.testpath, args.testlist, "val", 5, args.interval_scale,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
+        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, args.interval_scale, rt=args.rt,  use_raw_train=args.use_raw_train,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
+        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews, args.interval_scale,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
     elif args.dataset.startswith('blendedmvs'):
-        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", 7, robust_train=args.rt,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
-        test_dataset = MVSDataset(args.testpath, args.testlist, "val", 7,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
+        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, robust_train=args.rt,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
+        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
     else:
         train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, args.interval_scale, rt=args.rt, use_raw_train=args.use_raw_train,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
-        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.train_nviews, args.interval_scale,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
+        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews, args.interval_scale,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
         
     # dataloader
     if is_distributed:

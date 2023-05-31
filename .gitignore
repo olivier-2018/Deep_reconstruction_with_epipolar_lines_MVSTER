@@ -4,3 +4,4 @@ outputs_OBSOLETE/
 checkpoints/
 debug_figs/
 *__pycache__
+data/
