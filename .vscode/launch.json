@@ -16,10 +16,10 @@
                 "--trainpath","data/DTU/mvs_training",
                 "--trainlist","lists/dtu/train.txt",
                 "--testlist","lists/dtu/test.txt",
-                // "--loadckpt", "outputs/DTU_512x640_Nviews5_v2/model_21.ckpt", 
+                "--loadckpt", "outputs/DTU_512x640_Nviews5_v2/model_21.ckpt", 
                 "--train_nviews", "2",
                 "--test_nviews", "2",
-                "--lightings","7",
+                "--Nlights","7",
                 "--pair_fname","pair.txt",
                 "--logdir","./outputs/debug/trainDTU",
                 "--interval_scale","1.0625",
@@ -40,7 +40,7 @@
                 "--inverse_depth",
                 "--attn_temp", "2",
                 "--seed", "126",
-                "--debug", "16"   // 1:img+feats, 2: depths, 4:hypos, 8:attn_weights, 16:mono_depth
+                "--debug", "0"   // 1:img+feats, 2: depths, 4:hypos, 8:attn_weights, 16:mono_depth
             ]
         },
         {
@@ -50,21 +50,32 @@
             "program": "test_mvs4.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["--dataset=general_eval4", 
-                    "--batch_size=1 ", 
-                    "--testpath", "data/DTU/mvs_testing_1200x1600", 
-                    "--testlist", "lists/dtu/test_only1.txt",
-                    "--loadckpt", "./outputs_train/dtu_mid_512x640/model_17.ckpt" , 
-                    "--interval_scale", "1.0625", 
+            "args": [
+                    "--dataset=dataloader_eval", 
+                    "--dataset_name=dtu",
+                    "--batch_size=1", 
+                    "--datapath=data/DTU/mvs_training", 
                     "--outdir", "./outputs/debug/evalDTU", 
-                    "--use_raw_train", 
-                    "--thres_view", "4", 
+                    "--testlist=lists/dtu/test_only1.txt",
+                    "--loadckpt=outputs/DTU_512x640_Nviews5_v2/model_21.ckpt" , 
+                    "--interval_scale", "1.45", 
+                    "--pair_fname=eval_pair_4x3_30-32-34-36.txt", 
+                    "--max_h", "512",
+                    "--max_w", "640",
+
                     "--mono", 
-                    "--conf", "0.5" , 
                     "--group_cor" , 
                     "--attn_temp", "2" , 
-                    "--inverse_depth"]
-        },
+                    "--inverse_depth",
+
+                    "--NviewGen", "4",
+                    "--NviewFilter", "4",
+                    "--photomask", "0.5" , 
+                    "--geomask", "2",
+                    "--condmask_pixel", "1",
+                    "--condmask_depth", "0.01"
+                     ]
+        },  
         {
             "name": "Python: train_BDS4",
             "type": "python",
@@ -74,12 +85,15 @@
             "justMyCode": true,
             "cwd": "/home/deeplearning/BRO/EVAL_CODE/MVS/MVSTER",
             "args": ["--dataset","blender4", 
-                    "--trainpath", "data/Blender/BDS4_mvs_training_1024x1280", 
+                    "--trainpath", "data/Blender/BDS4_mvs_train_1024x1280", 
                     "--trainlist", "lists/BDS4/train.txt",
                     "--testlist", "lists/BDS4/test.txt",
-                    "--lightings","-3",
-                    "--pair_fname", "pair.txt",
-                    "--logdir", "./outputs/debug" , 
+                    "--pair_fname", "pair_40x10.txt",
+                    "--loadckpt", "outputs/newBDS4_512x640_rt20pct_10srcs_posenc2/model_23.ckpt", 
+                    "--train_nviews", "2",
+                    "--test_nviews", "2",
+                    "--Nlights","-3",
+                    "--logdir", "./outputs/debug/trainBDS4" , 
                     "--interval_scale", "1.45", 
                     "--ndepths", "8,8,4,4",
                     "--depth_inter_r", "0.5,0.5,0.5,1", 
@@ -97,7 +111,8 @@
                     "--mono",
                     "--inverse_depth",
                     "--attn_temp", "2", 
-                    "--debug", "0"
+                    "--seed", "126",
+                    "--debug", "1"   // 1:img+feats, 2: depths, 4:hypos, 8:attn_weights, 16:mono_depth
                     ]
         },
         {
@@ -107,24 +122,35 @@
             "program": "test_mvs4.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["--dataset=blender4_eval", 
+            "args": [
+                    "--dataset=dataloader_eval", 
+                    "--dataset_name=blender",
                     "--batch_size=1 ", 
-                    "--testpath", "data/Blender/BDS4_mvs_training_1024x1280", 
-                    "--testlist", "lists/blender/test_only1.txt",
-                    "--loadckpt", "./outputs_train/BDS4_512x640/model_10.ckpt" , 
-                    "--interval_scale", "1.44", 
-                    "--outdir", "./outputs_eval/BDS4_raw_1024x1280", 
-                    "--use_raw_train", 
-                    "--pair_fname", "pair_eval_40x10.txt", 
-                    "--thres_view", "3", 
+                    "--datapath", "data/Blender/BDS4_mvs_train_1024x1280", 
+                    "--outdir", "./outputs/debug/evalBDS4", 
+                    "--testlist", "lists/BDS4/test_scene56.txt",
+                    "--loadckpt", "./outputs/newBDS4_512x640_rt20pct_10srcs_posenc2/model_23.ckpt" , 
+                    "--pair_fname", "pair_eval_15-16-25-26_self.txt", 
+                    "--interval_scale", "1.45", 
+                    "--max_h", "512",
+                    "--max_w", "640",
+
                     "--mono", 
-                    "--save_jpg",
-                    "--conf", "0.5" , 
                     "--group_cor" , 
                     "--attn_temp", "2" , 
-                    "--inverse_depth"]
+                    "--inverse_depth",
+
+                    "--NviewGen", "4",
+                    "--NviewFilter", "4",
+                    "--photomask", "0.5" , 
+                    "--geomask", "2",
+                    "--condmask_pixel", "1",
+                    "--condmask_depth", "0.01"
+                ]
         }
     ]
 }
 // "--inverse_depth"],
 // "--rt"],
+
+// "--use_raw_train", 

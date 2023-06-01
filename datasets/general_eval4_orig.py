@@ -34,7 +34,7 @@ class MVSDataset(Dataset):
             else:
                 interval_scale_dict[scan] = self.interval_scale[scan]
 
-            pair_file = "Cameras/pair.txt"
+            pair_file = "{}/pair.txt".format(scan)
             # read the pair file
             with open(os.path.join(self.datapath, pair_file)) as f:
                 num_viewpoint = int(f.readline())
@@ -90,9 +90,6 @@ class MVSDataset(Dataset):
         return np.array(read_pfm(filename)[0], dtype=np.float32)
 
     def scale_mvs_input(self, img, intrinsics, max_w, max_h, base=64):
-        """ Resize img & intrinsecs in case input image is larger than (h_max, w_max).
-            Will determine which side is longer and rescale to a dimension in base 64.
-        """
         h, w = img.shape[:2]
         if h > max_h or w > max_w:
             scale = 1.0 * max_h / h
@@ -112,11 +109,9 @@ class MVSDataset(Dataset):
         return img, intrinsics
 
     def __getitem__(self, idx):
-        
         global s_h, s_w
         meta = self.metas[idx]
         scan, ref_view, src_views, scene_name = meta
-        
         # use only the reference view and first nviews-1 source views
         view_ids = [ref_view] + src_views[:self.nviews - 1]
 
@@ -125,15 +120,15 @@ class MVSDataset(Dataset):
         proj_matrices = []
 
         for i, vid in enumerate(view_ids):
-            
-            # Read image
-            img_filename = os.path.join(self.datapath, 'Rectified/{}/{:0>8}.jpg'.format(scan, vid))
+            img_filename = os.path.join(self.datapath, '{}/images_post/{:0>8}.jpg'.format(scan, vid))
+            if not os.path.exists(img_filename):
+                img_filename = os.path.join(self.datapath, '{}/images/{:0>8}.jpg'.format(scan, vid))
+
+            proj_mat_filename = os.path.join(self.datapath, '{}/cams/{:0>8}_cam.txt'.format(scan, vid))
+
             img = self.read_img(img_filename)
-            
-            # Read camera parameters
-            proj_mat_filename = os.path.join(self.datapath, 'Cameras/{:0>8}_cam.txt'.format(vid))
-            intrinsics, extrinsics, depth_min, depth_interval = self.read_cam_file(proj_mat_filename, interval_scale=self.interval_scale[scene_name])
-            
+            intrinsics, extrinsics, depth_min, depth_interval = self.read_cam_file(proj_mat_filename, interval_scale=
+                                                                                   self.interval_scale[scene_name])
             # scale input
             img, intrinsics = self.scale_mvs_input(img, intrinsics, self.max_w, self.max_h)
 
@@ -143,9 +138,8 @@ class MVSDataset(Dataset):
                 self.fix_res = False
                 self.fix_wh = True
 
-            # Capture dims of first image
             if i == 0:
-                if not self.fix_wh: # ensures s_h, s_w are captured (in case self.fix_res was set to False)
+                if not self.fix_wh:
                     # using the same standard height or width in each nviews.
                     s_h, s_w = img.shape[:2]
 
@@ -167,8 +161,8 @@ class MVSDataset(Dataset):
             proj_matrices.append(proj_mat)
 
             if i == 0:  # reference view
-                # depth_values = np.arange(depth_min, depth_interval * (self.ndepths - 0.5) + depth_min, depth_interval, dtype=np.float32)
-                depth_values = np.arange(depth_min, depth_min + depth_interval * self.ndepths, depth_interval, dtype=np.float32)
+                depth_values = np.arange(depth_min, depth_interval * (self.ndepths - 0.5) + depth_min, depth_interval,
+                                         dtype=np.float32)
 
         #all
         # imgs = np.stack(imgs).transpose([0, 3, 1, 2])

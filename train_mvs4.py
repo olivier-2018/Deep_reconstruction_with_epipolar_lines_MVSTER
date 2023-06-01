@@ -27,7 +27,7 @@ parser.add_argument('--testlist', help='test list')
 parser.add_argument('--pair_fname', default='pair.txt', help='view pair combination filename')
 parser.add_argument('--train_nviews', type=int, default=5, help='number of source views to use during training')
 parser.add_argument('--test_nviews', type=int, default=5, help='number of source views to use during testing')
-parser.add_argument('--lightings', type=int, default=7, help='number of light sources in dataset (if positive: iterate on multiple lights, if negative: single light with specified value, if null: single light w value 3)')
+parser.add_argument('--Nlights', type=int, default=7, help='number of light sources in dataset (if positive: iterate on multiple lights, if negative: single light with specified value, if null: single light w value 3)')
 
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
@@ -427,8 +427,7 @@ if __name__ == '__main__':
                     mono_stg_itrpl=args.mono_stg_itrpl,
                     asff=args.ASFF,
                     attn_temp=args.attn_temp,
-                    vis_stg_features=False, 
-                    debug=args.debug
+                    vis_stg_features=False
                 )
 
     model.to(device)
@@ -486,14 +485,14 @@ if __name__ == '__main__':
     MVSDataset = find_dataset_def(args.dataset)
     
     if args.dataset.startswith('dtu'):
-        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, args.interval_scale, rt=args.rt,  use_raw_train=args.use_raw_train,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
-        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews, args.interval_scale,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
+        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, args.interval_scale, rt=args.rt,  use_raw_train=args.use_raw_train,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
+        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews, args.interval_scale,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
     elif args.dataset.startswith('blendedmvs'):
-        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, robust_train=args.rt,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
-        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
+        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, robust_train=args.rt,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
+        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
     else:
-        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, args.interval_scale, rt=args.rt, use_raw_train=args.use_raw_train,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
-        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews, args.interval_scale,pair_fname=args.pair_fname,lightings=args.lightings,debug=args.debug)
+        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, args.interval_scale, rt=args.rt, use_raw_train=args.use_raw_train,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
+        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews, args.interval_scale,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
         
     # dataloader
     if is_distributed:

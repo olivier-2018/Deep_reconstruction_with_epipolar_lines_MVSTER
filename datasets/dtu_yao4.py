@@ -23,7 +23,6 @@ class MVSDataset(Dataset):
         self.use_raw_train = kwargs.get("use_raw_train", False)
         self.color_augment = transforms.ColorJitter(brightness=0.5, contrast=0.5)
         self.pair_fname = kwargs.get("pair_fname", "pair.txt")
-        self.lightings = kwargs.get("lightings", 7)
         
         print ("[MVSDataset] INIT: pair file: ", self.pair_fname)
 
