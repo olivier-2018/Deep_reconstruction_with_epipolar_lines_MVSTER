@@ -67,14 +67,17 @@
                     "--group_cor" , 
                     "--attn_temp=2" , 
                     "--inverse_depth",
-                    "--save_jpg",
 
                     "--NviewGen=4",
+                    "--depthgen_thres=0.5",
+                    "--debug_depth_gen=8",      // 1: imgs, 2: depth/masks, 4: view3Dpts, 8: Combi3Dpts, 15: ALL
+
                     "--NviewFilter=4",
                     "--photomask=0.5" , 
                     "--geomask=2",
                     "--condmask_pixel=1",
-                    "--condmask_depth=0.01"
+                    "--condmask_depth=0.01",
+                    "--debug_depth_filter=0"    // 1: depth/masks, 2: view3Dpts, 4: Fused 7:ALL
                      ]
         },  
         {

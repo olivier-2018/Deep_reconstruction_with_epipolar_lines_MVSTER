@@ -12,12 +12,14 @@ from utils import *
 from datasets.data_io import read_pfm, save_pfm
 from plyfile import PlyData, PlyElement
 from PIL import Image
+import open3d as o3d
 # from torchinfo import summary as torchinfo_summary
 # from torchsummary import summary as torchsummary
 
 from multiprocessing import Pool
 from functools import partial
 import signal
+
 
 cudnn.benchmark = True
 
@@ -51,9 +53,13 @@ parser.add_argument('--num_worker', type=int, default=1, help='depth_filter work
 parser.add_argument('--save_freq', type=int, default=20, help='save freq of local pcd')
 
 parser.add_argument('--filter_method', type=str, default='normal', choices=["gipuma", "normal"], help="filter method")
+parser.add_argument('--save_ply', action='store_true', help='saves depthmaps as ply')
+
 
 #filter
 parser.add_argument('--NviewGen', type=int, default=5, help='number of views used to generate depth maps (DTU=5)')
+parser.add_argument('--depthgen_thres', type=float, default=0.8, help='Depth generation photometric confidence mask: pixels with photo confidence below threshold are dismissed')
+
 parser.add_argument('--NviewFilter', type=int, default=10, help='number of src views used while filtering depth maps (DTU=10)')
 parser.add_argument('--photomask', type=float, default=0.8, help='photometric confidence mask: pixels with photo confidence below threshold are dismissed')
 parser.add_argument('--geomask', type=int, default=3, help='geometric view mask: pixels not seen by at least a certain number of views are dismissed ')
@@ -125,15 +131,22 @@ Interval_Scale = args.interval_scale
 print("=== Interval_Scale: ", Interval_Scale)
 
 
+
+def NormalizeNumpy(data):
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
+
+def get_powers(n):
+    return [str(p) for p,v in enumerate(bin(n)[:1:-1]) if int(v)]
+
 # read intrinsics and extrinsics
 def read_camera_parameters(filename):
     with open(filename) as f:
         lines = f.readlines()
         lines = [line.rstrip() for line in lines]
     # extrinsics: line [1,5), 4x4 matrix
-    extrinsics = np.fromstring(' '.join(lines[1:5]), dtype=np.float32, sep=' ').reshape((4, 4))
+    extrinsics = np.fromstring(' '.join(lines[1:5]), dtype=float, sep=' ').reshape((4, 4))
     # intrinsics: line [7-10), 3x3 matrix
-    intrinsics = np.fromstring(' '.join(lines[7:10]), dtype=np.float32, sep=' ').reshape((3, 3))
+    intrinsics = np.fromstring(' '.join(lines[7:10]), dtype=float, sep=' ').reshape((3, 3))
     return intrinsics, extrinsics
 
 
@@ -141,7 +154,7 @@ def read_camera_parameters(filename):
 def read_img(filename):
     img = Image.open(filename)
     # scale 0~255 to 0~1
-    np_img = np.array(img, dtype=np.float32) / 255.
+    np_img = np.array(img, dtype=float) / 255.
     return np_img
 
 
@@ -189,9 +202,125 @@ def write_cam(file, cam):
 
     f.close()
 
+def depth2pts_np(depth_map, cam_intrinsic, cam_extrinsic):
+    feature_grid = get_pixel_grids_np(depth_map.shape[0], depth_map.shape[1])
+
+    uv = np.matmul(np.linalg.inv(cam_intrinsic), feature_grid)
+    cam_points = uv * np.reshape(depth_map, (1, -1))
+
+    R = cam_extrinsic[:3, :3]
+    t = cam_extrinsic[:3, 3:4]
+    R_inv = np.linalg.inv(R)
+
+    world_points = np.matmul(R_inv, cam_points - t).transpose()
+    return world_points
+
+def get_pixel_grids_np(height, width):
+    x_linspace = np.linspace(0.5, width - 0.5, width)
+    y_linspace = np.linspace(0.5, height - 0.5, height)
+    x_coordinates, y_coordinates = np.meshgrid(x_linspace, y_linspace)
+    x_coordinates = np.reshape(x_coordinates, (1, -1))
+    y_coordinates = np.reshape(y_coordinates, (1, -1))
+    ones = np.ones_like(x_coordinates, dtype=float)
+    grid = np.concatenate([x_coordinates, y_coordinates, ones], axis=0)
+
+    return grid
 
 
+# Get Open3D box
+def get_o3d_frame_bbox(dims=(0.57, 0.37, 0.22), delta = (0,0,0), scale = 1, context=None):
+    """generate Open3D object for bin and frame
+    Args:
+        dims (tuple, optional): Bin box dimensions (in m). Defaults to (0.54, 0.34, 0.2).
+        delta (tuple, optional): Offset to apply to bin box. Mostly for non-Blender (i.e real datasets) where world ref is determined empirically. Defaults to (0,0,0).
+        scale (int, optional): scale factor. Defaults to 1.
+    Returns:
+        Open3D objects:frame, bounding_box, bounding_box2 (bbox with 2cm wall offset) - WARNING: in mm
+    """
+    
+    # Test Configurations (overides other arguments if defined)
+    if context is not None:
+        if "overhead03" in context:
+            # dims = (0.54, 0.34, 0.2)
+            dims = (0.57, 0.37, 0.22)
+            delta = (0.08, 0.03, .0)
+        elif "overhead02" in context:
+            # dims = (0.54, 0.34, 0.2)
+            dims = (0.57, 0.37, 0.22)
+            delta = (0.08, 0.03, .0)
+        elif "Merlin_Mario_Set_with_GT" in context:
+            dims = (0.57, 0.37, 0.22)
+            delta = (0.125, 0.09, .0)
+        else:
+            dims = (0.57, 0.37, 0.22)
+            delta = (0,0,0)
+                
+    # Plot axis and 3D points in WORLD ref
+    frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=100*scale, origin=[0, 0, 0])
 
+    # Change dimensions from m to mm
+    dims_bin = np.asarray(dims)*1000
+    delta_orig = np.asarray(delta)*1000
+    
+    # Apply scaling factor if any    
+    dims_bin *= scale
+    delta_orig *= scale
+    
+    # Create Bounding box for bin internal walls
+    min_bbox = -dims_bin / 2.0
+    max_bbox = dims_bin / 2.0
+    max_bbox[2] -= min_bbox[2]
+    min_bbox[2] = 0 
+    
+    bbox = o3d.geometry.AxisAlignedBoundingBox()
+    bbox.min_bound = min_bbox + delta_orig
+    bbox.max_bound = max_bbox + delta_orig
+    bbox.color = [0, 0, 1]
+    
+    # Create Bounding box for bin external walls
+    wall_size = 20   # in mm
+    
+    bbox2 = o3d.geometry.AxisAlignedBoundingBox()
+    bbox2.min_bound = min_bbox + delta_orig - np.array((wall_size, wall_size, wall_size))
+    bbox2.max_bound = max_bbox + delta_orig + np.array((wall_size, wall_size, 0))
+    bbox2.color = [1, 0, 0]
+    
+    # o3d.visualization.draw_geometries([frame] + [bbox] + [bbox2])
+    
+    return frame, bbox, bbox2 
+
+
+def invert(rotation_translation):
+    '''Invert a 3D rotation matrix in their (R | t) representation    '''
+    rot = rotation_translation[0].T
+    trans = -rot @ rotation_translation[1]
+    return (rot, trans)
+
+
+def get_o3d_cameras(cam_extrinsics, highlight_1st=False):
+    
+    cams=[]
+    for i, extrinsics in enumerate(cam_extrinsics):
+        rotation = extrinsics[:3,:3]
+        translation = extrinsics[:3,-1]
+
+        camera_rotation, camera_translation = invert((rotation, translation))
+
+        height = 30
+        cam = o3d.geometry.TriangleMesh.create_arrow(cylinder_radius=5,cone_radius=10,cylinder_height=height,cone_height=height/3)
+        cam.compute_vertex_normals()
+        if i==0 and highlight_1st:
+        # if i in list(np.arange(11,19)):
+            cam.paint_uniform_color((1,0,0))
+        else:
+            cam.paint_uniform_color((0,0,1))
+        cam.translate([0, 0, -height])
+        cam.rotate(camera_rotation, center=np.array([0, 0, 0]))
+        cam.translate(camera_translation)
+        
+        cams.append(cam)
+    
+    return cams
 
 
 ######## SAVE DEPTHS ####################################################################################
@@ -259,6 +388,11 @@ def save_scene_depth(testlist):
     model.cuda()
     model.eval()
     
+    # for the final point cloud
+    vertices = []
+    vertices_colors = []
+    cam_extrinsics = []
+        
     # Eval
     total_time = 0
     with torch.no_grad():
@@ -276,28 +410,46 @@ def save_scene_depth(testlist):
             del sample_cuda 
             filenames = sample["filename"]
             cams = sample["proj_matrices"]["stage{}".format(num_stage)].numpy()
-            imgs = sample["imgs"]
-            print('=== Iter {}/{}, Ref view: {} Src views: {} Time:{} Res:{}'.format(batch_idx, len(TestImgLoader), test_dataset.metas[0][1], test_dataset.metas[0][2],end_time - start_time, imgs[0].shape))
+            imgs = tensor2numpy(sample["imgs"]) 
+            print('=== Iter {}/{}, Ref view: {} Src views: {} Time:{:.4f} '.format(batch_idx, 
+                                                                                     len(TestImgLoader), 
+                                                                                     test_dataset.metas[0][1], 
+                                                                                     test_dataset.metas[0][2],
+                                                                                     end_time - start_time
+                                                                                     ))
             sys.stdout.flush()
-
-            # save depth maps and confidence maps
-            for filename, cam, img, depth_est, photometric_confidence in zip(filenames, cams, imgs, outputs["stage4"]["depth"], outputs["stage4"]["photometric_confidence"]): 
-                img = img[0].numpy()  #ref view
-                cam = cam[0]  #ref cam
-                depth_filename = os.path.join(args.outdir, filename.format('depth_est', '.pfm'))
-                confidence_filename = os.path.join(args.outdir, filename.format('confidence', '.pfm'))
-                cam_filename = os.path.join(args.outdir, filename.format('cams', '_cam.txt'))
-                img_filename = os.path.join(args.outdir, filename.format('images', '.jpg'))
-                ply_filename = os.path.join(args.outdir, filename.format('ply_local', '.ply'))
-                os.makedirs(depth_filename.rsplit('/', 1)[0], exist_ok=True)
-                os.makedirs(confidence_filename.rsplit('/', 1)[0], exist_ok=True)
-                os.makedirs(cam_filename.rsplit('/', 1)[0], exist_ok=True)
-                os.makedirs(img_filename.rsplit('/', 1)[0], exist_ok=True)
-                os.makedirs(ply_filename.rsplit('/', 1)[0], exist_ok=True)
+            
+            # save depth maps and confidence maps (zip useful only if batch not = 1)
+            for filename, cam, img, depth_est, photo_conf in zip(filenames, cams, imgs, outputs["stage4"]["depth"], outputs["stage4"]["photometric_confidence"]): 
                 
-                #save depth maps
+                camID = filename.split("/")[2][-5:-2]                
+                
+                # Save images                
+                img = img[0]  # ref view
+                img_filename = os.path.join(args.outdir, filename.format('images', '.jpg'))
+                os.makedirs(img_filename.rsplit('/', 1)[0], exist_ok=True)
+                img = np.clip(np.transpose(img, (1, 2, 0)) * 255, 0, 255).astype(np.uint8)
+                img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                cv2.imwrite(img_filename, img_bgr)
+
+                #  DEBUG plot input images
+                if '0' in get_powers(args.debug_depth_gen): # add 1
+                    res = img.shape
+                    scale = res[1]//600                    
+                    cv2.imshow('[IMG] cam:{} Res:{}->{}'.format(camID, res[:2], str(tuple(int(x//scale) for x in res[:2]))), img_bgr[::scale, ::scale])    
+                    
+                    cv2.waitKey(0)
+                    cv2.destroyAllWindows()
+                # END DEBUG 
+
+                # save depth maps
+                depth_filename = os.path.join(args.outdir, filename.format('depth_est', '.pfm'))
+                os.makedirs(depth_filename.rsplit('/', 1)[0], exist_ok=True)
                 save_pfm(depth_filename, depth_est)
-                if args.save_jpg:                       
+                cv2.imwrite(depth_filename.replace(".pfm",".png"),  np.uint8(NormalizeNumpy(depth_est)*255))
+
+                #  Optional: save depthmaps with pretty colors 
+                if args.save_jpg:     
                     print("Depth pictures saved to files for stage ", end="")
                     for stage_idx in range(4):
                         depth_jpg_filename = os.path.join(args.outdir, filename.format('depth_est', '{}_{}.jpg'.format('stage',str(stage_idx+1))))
@@ -328,20 +480,110 @@ def save_scene_depth(testlist):
                     print()
                     
                 #save confidence maps
-                confidence_list = [outputs['stage{}'.format(i)]['photometric_confidence'].squeeze(0) for i in range(1,5)]
-                photometric_confidence = confidence_list[-1]  # H W
-                save_pfm(confidence_filename, photometric_confidence) 
+                photo_conf_mask = (photo_conf > args.depthgen_thres) * 1.0  
+                confidence_filename = os.path.join(args.outdir, filename.format('confidence', '.pfm'))
+                os.makedirs(confidence_filename.rsplit('/', 1)[0], exist_ok=True)
+                save_pfm(confidence_filename, photo_conf) 
+                cv2.imwrite(confidence_filename.replace(".pfm", ".png"), np.uint8(photo_conf * 255))
                 
-                #save cams, img
+                #  DEBUG plot depth & photo conf
+                if '1' in get_powers(args.debug_depth_gen): # add 2  
+                    cv2.imshow("[DEPTH] cam:{} Res:{}".format(camID, str(depth_est.shape)), NormalizeNumpy(depth_est)) 
+                    cv2.imshow("[CONF] cam:{} Res:{}".format(camID, str(photo_conf.shape)), photo_conf) 
+                    cv2.imshow("[CONF {:.0f}%] cam:{} Res:{}".format(args.depthgen_thres*100, camID, str(photo_conf.shape)), photo_conf_mask ) 
+                    cv2.waitKey(0)
+                    cv2.destroyAllWindows()    
+                #  DEBUG: plot 3D point-cloud
+                
+                #save cams                
+                cam = cam[0]  #ref cam
+                ref_extrinsics = cam[0]
+                ref_intrinsics = cam[1][:3,:3]
+                cam_filename = os.path.join(args.outdir, filename.format('cams', '_cam.txt'))
+                os.makedirs(cam_filename.rsplit('/', 1)[0], exist_ok=True)
                 write_cam(cam_filename, cam)
-                img = np.clip(np.transpose(img, (1, 2, 0)) * 255, 0, 255).astype(np.uint8)
-                img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                cv2.imwrite(img_filename, img_bgr)
+                cam_extrinsics.append(ref_extrinsics)
 
                 # generate local points cloud
-                generate_pointcloud(img, depth_est, ply_filename, cam[1, :3, :3])
-                sys.stdout.flush()
+                if args.save_ply: 
+                    ply_filename = os.path.join(args.outdir, filename.format('ply_local', '.ply'))
+                    os.makedirs(ply_filename.rsplit('/', 1)[0], exist_ok=True)
+                    generate_pointcloud(img, depth_est, ply_filename, cam[1, :3, :3])
                 
+                # Create 3D points cloud     
+                xyz_world = depth2pts_np(depth_est, ref_intrinsics, ref_extrinsics) # all points
+                xyz_world_masked = xyz_world[photo_conf_mask.flatten()==1]
+                xyz_color_masked = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)[photo_conf_mask==1]/255       
+                
+                # Add to global point cloud
+                vertices.append(xyz_world_masked)
+                vertices_colors.append((xyz_color_masked * 255).astype(np.uint8)) # only keep points with certain pho_conf
+        
+                # DEBUG - Plot 3D point cloud for each view
+                if '2' in get_powers(args.debug_depth_gen): # add 4
+                                
+                    # Create frame and bounding boxes
+                    frame, bbox, bbox2 = get_o3d_frame_bbox(context = args.datapath)
+                    
+                    # get_camera objects
+                    o3D_cameras = get_o3d_cameras([ref_extrinsics], True)
+                    
+                    # Create  point cloud
+                    pcd = o3d.geometry.PointCloud()
+                    pcd.points = o3d.utility.Vector3dVector(xyz_world_masked)
+                    pcd.colors = o3d.utility.Vector3dVector(xyz_color_masked)
+                    pcd.estimate_normals()
+                    
+                    # plot (type h for help in open3d)
+                    if args.dataset_name in ["dtu"]:
+                        o3d.visualization.draw_geometries([frame]+[pcd]+o3D_cameras,
+                                                            front   = [ 0.85, 0.12, -0.50],
+                                                            lookat  = [ 27.36, 26.01, 578.24],
+                                                            up      = [ -0.37, -0.54, -0.76 ],
+                                                            zoom    = 0.34)
+                        # Display intensity of probability
+                        # a = NormalizeNumpy(refine_conf[refine_conf_mask==1])
+                        # b = np.zeros((len(c),))
+                        # c = np.ones((len(c),))
+                        # pcd.colors = o3d.utility.Vector3dVector(np.stack((a,c, c), axis=1))
+                        # o3d.visualization.draw_geometries([pcd])                
+                    else:
+                        o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd]+o3D_cameras)
+
+    #  Once all images processed, concatenate all vertices and save as ply format
+    vertices_allviews = np.concatenate(vertices, axis=0)
+    vertices_colors_allviews = np.concatenate(vertices_colors, axis=0)
+    
+    
+    # DEBUG - Plot final combined 3D point cloud
+    if '3' in get_powers(args.debug_depth_gen): # add 8
+        
+        # Create frame and bounding boxes
+        frame, bbox, bbox2 = get_o3d_frame_bbox(context=args.datapath)
+            
+        # get_camera objects
+        o3D_cameras = get_o3d_cameras(cam_extrinsics, False)
+        
+        # Create  point cloud
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(vertices_allviews)
+        pcd.colors = o3d.utility.Vector3dVector(vertices_colors_allviews/255)
+        pcd.estimate_normals()
+        
+        # plot (type h for help in open3d)
+        if args.dataset_name in ["dtu"]:
+            o3d.visualization.draw_geometries([frame]+[pcd]+o3D_cameras,
+                                                front   = [ 0.85, 0.12, -0.50],
+                                                lookat  = [ 27.36, 26.01, 578.24],
+                                                up      = [ -0.37, -0.54, -0.76 ],
+                                                zoom    = 0.34)
+        else:
+            o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd]+o3D_cameras)
+                 
+            pcd = pcd.crop(bbox2) 
+            pcd = pcd.voxel_down_sample(voxel_size=3)
+            o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd]+o3D_cameras)
+    # DEBUG - END
 
     torch.cuda.empty_cache()
     gc.collect()
@@ -373,8 +615,8 @@ def reproject_with_depth(depth_ref, intrinsics_ref, extrinsics_ref, depth_src, i
 
     ## step2. reproject the source view points with source view depth estimation
     # find the depth estimation of the source view
-    x_src = xy_src[0].reshape([height, width]).astype(np.float32)
-    y_src = xy_src[1].reshape([height, width]).astype(np.float32)
+    x_src = xy_src[0].reshape([height, width]).astype(float)
+    y_src = xy_src[1].reshape([height, width]).astype(float)
     sampled_depth_src = cv2.remap(depth_src, x_src, y_src, interpolation=cv2.INTER_LINEAR)
     # mask = sampled_depth_src > 0
 
@@ -386,11 +628,11 @@ def reproject_with_depth(depth_ref, intrinsics_ref, extrinsics_ref, depth_src, i
     xyz_reprojected = np.matmul(np.matmul(extrinsics_ref, np.linalg.inv(extrinsics_src)),
                                 np.vstack((xyz_src, np.ones_like(x_ref))))[:3]
     # source view x, y, depth
-    depth_reprojected = xyz_reprojected[2].reshape([height, width]).astype(np.float32)
+    depth_reprojected = xyz_reprojected[2].reshape([height, width]).astype(float)
     K_xyz_reprojected = np.matmul(intrinsics_ref, xyz_reprojected)
     xy_reprojected = K_xyz_reprojected[:2] / K_xyz_reprojected[2:3]
-    x_reprojected = xy_reprojected[0].reshape([height, width]).astype(np.float32)
-    y_reprojected = xy_reprojected[1].reshape([height, width]).astype(np.float32)
+    x_reprojected = xy_reprojected[0].reshape([height, width]).astype(float)
+    y_reprojected = xy_reprojected[1].reshape([height, width]).astype(float)
 
     return depth_reprojected, x_reprojected, y_reprojected, x_src, y_src
 
@@ -568,6 +810,7 @@ def mrun_rst(eval_dir, plyPath):
 
 if __name__ == '__main__':
 
+    # Some checks
     if args.vis_ETA:
         # os.makedirs(os.path.join(args.outdir,'debug_figs/vis_ETA'), exist_ok=True)
         os.makedirs('./debug/figs/vis_ETA', exist_ok=True)
@@ -577,6 +820,8 @@ if __name__ == '__main__':
             content = f.readlines()
             testlist = [line.rstrip() for line in content]
         print ("[test_mvs4] main: ", testlist)
+        
+    assert args.batch_size == 1, "Please ensure batch size is 1 for output display and postprocessing purpose."
 
     # step1. save all the depth maps and the masks in outputs directory
     print("[test_mvs4] main: == save_depth ==")
