@@ -32,6 +32,8 @@ class MVSDataset(Dataset):
         if self.dsname == "dtu":        
             self.img_folder = 'Rectified_raw/{}/rect_{:0>3}_3_r5000.png'
             self.cam_folder = 'Cameras/{:0>8}_cam.txt'
+            # self.img_folder = 'Rectified/{}_train/rect_{:0>3}_3_r5000.png'
+            # self.cam_folder = 'Cameras/train/{:0>8}_cam.txt'
         elif self.dsname == "blender":
             self.img_folder = 'Rectified'+self.resolution+'/{}/rect_C{:0>3}_L{:0>2}.png'
             self.cam_folder = 'Cameras'+self.resolution+'/{:0>8}_cam.txt'
@@ -202,6 +204,9 @@ class MVSDataset(Dataset):
             # Read & rescale image input
             img, intrinsics = self.read_rescale_crop_img(img_filename, intrinsics, (self.max_h, self.max_w))                
 
+            if self.dsname == "dtu" and self.cam_folder[:13] == 'Cameras/train':
+                intrinsics[:2] *= 4
+                
             # Append images, transpose from H,W,C to C,H,W ?
             imgs.append(img.transpose(2,0,1))
             

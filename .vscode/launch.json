@@ -60,24 +60,28 @@
                     "--loadckpt=outputs/DTU_512x640_Nviews5_v2/model_21.ckpt" , 
                     "--interval_scale=1.45", 
                     "--pair_fname=eval_pair_4x3_30-32-34-36.txt", 
-                    "--max_h=512",
-                    "--max_w=640",
+                    "--max_h=1200",
+                    "--max_w=1600",                    
+                    // "--max_h=512",
+                    // "--max_w=640",
 
                     "--mono", 
                     "--group_cor" , 
-                    "--attn_temp=2" , 
+                    "--attn_temp=2", 
                     "--inverse_depth",
 
+                    "--run_gendepth",
                     "--NviewGen=4",
                     "--depthgen_thres=0.5",
-                    "--debug_depth_gen=8",      // 1: imgs, 2: depth/masks, 4: view3Dpts, 8: Combi3Dpts, 15: ALL
+                    "--debug_depth_gen=0",      // 1: imgs, 2: depth/masks, 4: view3Dpts, 8: Combi3Dpts, 15: ALL
 
+                    "--run_filter",
                     "--NviewFilter=4",
                     "--photomask=0.5" , 
                     "--geomask=2",
                     "--condmask_pixel=1",
                     "--condmask_depth=0.01",
-                    "--debug_depth_filter=0"    // 1: depth/masks, 2: view3Dpts, 4: Fused 7:ALL
+                    "--debug_depth_filter=4"    // 1: depth/masks, 2: view3Dpts, 4: Fused 7:ALL
                      ]
         },  
         {
