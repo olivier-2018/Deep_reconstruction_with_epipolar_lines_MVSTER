@@ -156,10 +156,15 @@ def train(model, model_loss, optimizer, TrainImgLoader, TestImgLoader, start_epo
                     save_scalars(logger, 'train', scalar_outputs, global_step)
                     save_images(logger, 'train', image_outputs, global_step)
                     print(
-                       "Epoch {}/{}, Iter {}/{}, lr {:.6f}, train loss = {:.3f}, d_loss = {:.3f}, {:.3f}, {:.3f}, {:.3f}, c_loss = {:.3f}, {:.3f}, {:.3f}, {:.3f}, range_err = {:.3f}, {:.3f}, {:.3f}, {:.3f}, time = {:.3f}".format(
+                       "Epoch {}/{}, Iter {}/{}, lr {:.6f}, loss = {:.3f}, abs.depth.err.={:.2f}, Thres1/2/4/8mmm=({:.1f}%,{:.1f}%,{:.1f}%,{:.1f}%), mono_loss=({:.1f},{:.1f},{:.1f},{:.1f}), stg_loss=({:.1f},{:.1f},{:.1f},{:.1f}), range_err=({:.2f},{:.2f},{:.2f},{:.2f}), time = {:.3f}".format(
                            epoch_idx, args.epochs, batch_idx, len(TrainImgLoader),
                            optimizer.param_groups[0]["lr"], 
                            loss,
+                           scalar_outputs["abs_depth_error"],
+                           scalar_outputs["thres1mm_error"]*100,
+                           scalar_outputs["thres2mm_error"]*100,
+                           scalar_outputs["thres4mm_error"]*100,
+                           scalar_outputs["thres8mm_error"]*100,
                            scalar_outputs["s0_d_loss"],
                            scalar_outputs["s1_d_loss"],
                            scalar_outputs["s2_d_loss"],
@@ -194,8 +199,7 @@ def train(model, model_loss, optimizer, TrainImgLoader, TestImgLoader, start_epo
             avg_test_scalars = DictAverageMeter()
             for batch_idx, sample in enumerate(TestImgLoader):
                 start_time = time.time()
-                global_step = len(TrainImgLoader) * epoch_idx + batch_idx
-                # global_step = (len(TrainImgLoader) + len(TestImgLoader)) * epoch_idx + batch_idx                 
+                global_step = len(TrainImgLoader) * epoch_idx + batch_idx # using len(TrainImgLoader) to keep pace with training
                 do_summary = global_step % args.summary_freq == 0
                 loss, scalar_outputs, image_outputs = test_sample_depth(model, model_loss, sample, args)
                 if (not is_distributed) or (dist.get_rank() == 0):
@@ -203,23 +207,46 @@ def train(model, model_loss, optimizer, TrainImgLoader, TestImgLoader, start_epo
                         save_scalars(logger, 'test', scalar_outputs, global_step)
                         save_images(logger, 'test', image_outputs, global_step)
                         print(
-                            "Epoch {}/{}, Iter {}/{}, lr {:.6f}, test loss = {:.3f}, d_loss = {:.3f}, {:.3f}, {:.3f}, {:.3f}, c_loss = {:.3f}, {:.3f}, {:.3f}, {:.3f}, range_err = {:.3f}, {:.3f}, {:.3f}, {:.3f}, time = {:.3f}".format(
-                            epoch_idx, args.epochs, batch_idx, len(TrainImgLoader),
-                               optimizer.param_groups[0]["lr"], 
-                           loss,
-                           scalar_outputs["s0_d_loss"],
-                           scalar_outputs["s1_d_loss"],
-                           scalar_outputs["s2_d_loss"],
-                           scalar_outputs["s3_d_loss"],
-                           scalar_outputs["s0_c_loss"],
-                           scalar_outputs["s1_c_loss"],
-                           scalar_outputs["s2_c_loss"],
-                           scalar_outputs["s3_c_loss"],
-                           scalar_outputs["s0_range_err_ratio"],
-                           scalar_outputs["s1_range_err_ratio"],
-                           scalar_outputs["s2_range_err_ratio"],
-                           scalar_outputs["s3_range_err_ratio"],
-                            time.time() - start_time))
+                        "Epoch {}/{}, Iter {}/{}, lr {:.6f}, loss = {:.3f}, abs.depth.err.={:.2f}, Thres1/2/4/8mmm=({:.1f}%,{:.1f}%,{:.1f}%,{:.1f}%), mono_loss=({:.1f},{:.1f},{:.1f},{:.1f}), stg_loss=({:.1f},{:.1f},{:.1f},{:.1f}), range_err=({:.2f},{:.2f},{:.2f},{:.2f}), time = {:.3f}".format(
+                            epoch_idx, args.epochs, batch_idx, len(TestImgLoader),
+                            optimizer.param_groups[0]["lr"], 
+                            loss,
+                            scalar_outputs["abs_depth_error"],
+                            scalar_outputs["thres1mm_error"]*100,
+                            scalar_outputs["thres2mm_error"]*100,
+                            scalar_outputs["thres4mm_error"]*100,
+                            scalar_outputs["thres8mm_error"]*100,
+                            scalar_outputs["s0_d_loss"],
+                            scalar_outputs["s1_d_loss"],
+                            scalar_outputs["s2_d_loss"],
+                            scalar_outputs["s3_d_loss"],
+                            scalar_outputs["s0_c_loss"],
+                            scalar_outputs["s1_c_loss"],
+                            scalar_outputs["s2_c_loss"],
+                            scalar_outputs["s3_c_loss"],
+                            scalar_outputs["s0_range_err_ratio"],
+                            scalar_outputs["s1_range_err_ratio"],
+                            scalar_outputs["s2_range_err_ratio"],
+                            scalar_outputs["s3_range_err_ratio"],
+                            time.time() - start_time))                        
+                        # print(
+                        #     "Epoch {}/{}, Iter {}/{}, lr {:.6f}, test loss = {:.3f}, d_loss = {:.3f}, {:.3f}, {:.3f}, {:.3f}, c_loss = {:.3f}, {:.3f}, {:.3f}, {:.3f}, range_err = {:.3f}, {:.3f}, {:.3f}, {:.3f}, time = {:.3f}".format(
+                        #     epoch_idx, args.epochs, batch_idx, len(TrainImgLoader),
+                        #        optimizer.param_groups[0]["lr"], 
+                        #    loss,
+                        #    scalar_outputs["s0_d_loss"],
+                        #    scalar_outputs["s1_d_loss"],
+                        #    scalar_outputs["s2_d_loss"],
+                        #    scalar_outputs["s3_d_loss"],
+                        #    scalar_outputs["s0_c_loss"],
+                        #    scalar_outputs["s1_c_loss"],
+                        #    scalar_outputs["s2_c_loss"],
+                        #    scalar_outputs["s3_c_loss"],
+                        #    scalar_outputs["s0_range_err_ratio"],
+                        #    scalar_outputs["s1_range_err_ratio"],
+                        #    scalar_outputs["s2_range_err_ratio"],
+                        #    scalar_outputs["s3_range_err_ratio"],
+                        #     time.time() - start_time))
                         sys.stdout.flush()
                     avg_test_scalars.update(scalar_outputs)
                     del scalar_outputs, image_outputs              
@@ -238,8 +265,7 @@ def test(model, model_loss, TestImgLoader, args):
         avg_test_scalars.update(scalar_outputs)
         del scalar_outputs, image_outputs
         if (not is_distributed) or (dist.get_rank() == 0):
-            print('Iter {}/{}, test loss = {:.3f}, time = {:3f}'.format(batch_idx, len(TestImgLoader), loss,
-                                                                        time.time() - start_time))
+            print('Iter {}/{}, test loss = {:.3f}, time = {:3f}'.format(batch_idx, len(TestImgLoader), loss, time.time() - start_time))
             if batch_idx % 100 == 0:
                 print("Iter {}/{}, test results = {}".format(batch_idx, len(TestImgLoader), avg_test_scalars.mean()))
     if (not is_distributed) or (dist.get_rank() == 0):
@@ -262,10 +288,19 @@ def train_sample(model, model_loss, optimizer, sample, args):
 
     # FORWARD PASS
     outputs = model(sample_cuda["imgs"], sample_cuda["proj_matrices"], sample_cuda["depth_values"]) 
-    # INFO: dict_keys(['stage1', 'depth', 'photometric_confidence', 'hypo_depth', 'attn_weight', 'inverse_min_depth', 'inverse_max_depth', 'mono_feat', 'stage2', 'stage3', 'stage4'])
+    # INFO: dict_keys(['stage1', , 'stage2', 'stage3', 'stage4']
+    #          dict_keys(['depth', 'photometric_confidence', 'hypo_depth', 'attn_weight', 'inverse_min_depth', 'inverse_max_depth', 'mono_feat']) for stage1
+    #          dict_keys(['depth', 'photometric_confidence', 'hypo_depth', 'attn_weight', 'inverse_min_depth', 'inverse_max_depth', 'mono_feat', 'mono_depth']) only in stag2,3,4
     
-    depth_est = outputs["depth"]
-
+    depth_est = outputs["stage4"]["depth"]
+    errormap = (depth_est - depth_gt).abs() * mask
+    
+    mask_errormap_1mm = (errormap < 1.0) * 1.0
+    mask_errormap_1mm[mask<0.5] = 0.0
+    
+    mask_errormap_2mm = (errormap < 2.0) * 1.0
+    mask_errormap_2mm[mask<0.5] = 0.0
+    
     # LOSS EVALUATION
     loss, stage_d_loss, stage_c_loss, range_err_ratio = model_loss(
                                         outputs, depth_gt_ms, mask_ms, stage_lw=[float(e) for e in args.dlossw.split(",") if e], 
@@ -295,16 +330,21 @@ def train_sample(model, model_loss, optimizer, sample, args):
                       "s2_range_err_ratio":range_err_ratio[2],
                       "s3_range_err_ratio":range_err_ratio[3],
                       "abs_depth_error": AbsDepthError_metrics(depth_est, depth_gt, mask > 0.5),
+                      "thres1mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 1),
                       "thres2mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 2),
                       "thres4mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 4),
                       "thres8mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 8),}
-
-    image_outputs = {"depth_est": depth_est * mask,
+        
+    image_outputs = {
+                     "depth_est": depth_est * mask,
                      "depth_est_nomask": depth_est,
-                     "depth_gt": sample["depth"]["stage1"],
+                     "depth_gt": sample["depth"]["stage2"],
                      "ref_img": sample["imgs"][0],
                      "mask": sample["mask"]["stage1"],
-                     "errormap": (depth_est - depth_gt).abs() * mask,
+                     "errormap": errormap,
+                     "errormap_1mm_mask": mask_errormap_1mm,
+                     "errormap_2mm_mask": mask_errormap_2mm,
+                     "mask": sample["mask"]["stage1"],
                      }
 
     if is_distributed:
@@ -330,7 +370,14 @@ def test_sample_depth(model, model_loss, sample, args):
     mask = mask_ms["stage{}".format(num_stage)]
 
     outputs = model_eval(sample_cuda["imgs"], sample_cuda["proj_matrices"], sample_cuda["depth_values"])
-    depth_est = outputs["depth"]
+    depth_est = outputs["stage4"]["depth"]
+    errormap = (depth_est - depth_gt).abs() * mask
+    
+    mask_errormap_1mm = (errormap < 1.0) * 1.0
+    mask_errormap_1mm[mask<0.5] = 0.0
+    
+    mask_errormap_2mm = (errormap < 2.0) * 1.0
+    mask_errormap_2mm[mask<0.5] = 0.0
 
     loss, stage_d_loss, stage_c_loss, range_err_ratio = model_loss(
                                         outputs, depth_gt_ms, mask_ms, stage_lw=[float(e) for e in args.dlossw.split(",") if e], 
@@ -353,18 +400,24 @@ def test_sample_depth(model, model_loss, sample, args):
                       "s2_range_err_ratio":range_err_ratio[2],
                       "s3_range_err_ratio":range_err_ratio[3],
                       "abs_depth_error": AbsDepthError_metrics(depth_est, depth_gt, mask > 0.5),
+                      "thres2mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 1),
                       "thres2mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 2),
                       "thres4mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 4),
                       "thres8mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 8),
                     }
 
-    image_outputs = {"depth_est": depth_est * mask,
+    image_outputs = {
+                     "depth_est": depth_est * mask,
                      "depth_est_nomask": depth_est,
-                     "depth_gt": sample["depth"]["stage1"],
+                     "depth_gt": sample["depth"]["stage2"],
                      "ref_img": sample["imgs"][0],
                      "mask": sample["mask"]["stage1"],
-                     "errormap": (depth_est - depth_gt).abs() * mask}
-
+                     "errormap": errormap,
+                     "errormap_1mm_mask": mask_errormap_1mm,
+                     "errormap_2mm_mask": mask_errormap_2mm,
+                     "mask": sample["mask"]["stage1"],
+                     }
+    
     if is_distributed:
         scalar_outputs = reduce_scalar_outputs(scalar_outputs)
 

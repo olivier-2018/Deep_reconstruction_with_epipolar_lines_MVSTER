@@ -191,9 +191,11 @@ def write_cam(file, cam):
 
 
 
-##############################################################
 
 
+
+######## SAVE DEPTHS ####################################################################################
+#########################################################################################################
 
 def save_depth(testlist):
     
@@ -279,8 +281,7 @@ def save_scene_depth(testlist):
             sys.stdout.flush()
 
             # save depth maps and confidence maps
-            for filename, cam, img, depth_est, photometric_confidence in zip(filenames, cams, imgs, outputs["depth"], outputs["photometric_confidence"]): # if using outputs.update(...) in MVSNet
-            # for filename, cam, img, depth_est, photometric_confidence in zip(filenames, cams, imgs, outputs["stage4"]["depth"], outputs["stage4"]["photometric_confidence"]):
+            for filename, cam, img, depth_est, photometric_confidence in zip(filenames, cams, imgs, outputs["stage4"]["depth"], outputs["stage4"]["photometric_confidence"]): 
                 img = img[0].numpy()  #ref view
                 cam = cam[0]  #ref cam
                 depth_filename = os.path.join(args.outdir, filename.format('depth_est', '.pfm'))
@@ -346,6 +347,11 @@ def save_scene_depth(testlist):
     gc.collect()
     return total_time, len(TestImgLoader)
 
+
+
+
+###### FILTER ##############################################################################################
+############################################################################################################
 
 
 # project the reference point cloud into the source view, then project back

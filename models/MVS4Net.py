@@ -172,21 +172,17 @@ class MVS4net(nn.Module):
                 cv2.destroyAllWindows()
             # END DEBUG 
         
-        # get stage4 outputs in outputs
-        outputs.update(outputs_stage) # CHECK: adds outputs_stage keys to outputs dictionnary ??? required during training?
+        # get stage_outputs in outputs, but why?
+        # outputs.update(outputs_stage) # CHECK: adds outputs_stage keys to outputs dictionnary ??? required during training?
         
         if self.mono and self.training:
         # if self.mono:
             outputs = self.mono_depth_decoder(outputs, depth_values[:,0], depth_values[:,1], self.debug)  # INFO; depth_values has only 2 depth values (min & max)   (batch,2) with len(D)=2 
             stages = [stg for stg in outputs.keys() if stg[:5]=="stage"]
-            # INFO
-            # dict_keys(['stage1', 'depth', 'photometric_confidence', 'hypo_depth', 'attn_weight', 'inverse_min_depth', 'inverse_max_depth', 'mono_feat', 'stage2', 'stage3', 'stage4'])
-            # each stage: dict_keys(['depth', 'photometric_confidence', 'hypo_depth', 'attn_weight', 'inverse_min_depth', 'inverse_max_depth', 'mono_feat'])
-            #
             
             # DEBUG - plot Mono depth
             if "4" in get_powers(self.debug): # add 16
-                for stg in stages[1:]:   # Sweep through each stage     
+                for stg in stages[1:]:   # Sweep through stages 2-4, not 1     
                     feat_img = outputs[stg]["mono_depth"][0]  # only first in batch
                     cv2.imshow(f"[MONODEPTH] {stg}", NormalizeNumpy(feat_img.detach().cpu().numpy()))
                 cv2.waitKey(0)

@@ -6,7 +6,7 @@ from datasets.data_io import *
 from torchvision import transforms
 
 
-DEBUG = True # local debugging
+DEBUG = False # local debugging
 
 class MVSDataset(Dataset):
     def __init__(self, datapath, listfile, mode, nviews, interval_scale=1.06, **kwargs):
@@ -47,7 +47,7 @@ class MVSDataset(Dataset):
         # Load pair data
         pair_file = os.path.join(self.datapath, self.pair_fname)
         
-        if DEBUG: print ("[MVSDataset] (init) Pairfile: ", pair_file)
+        if DEBUG: print ("[DATALOADER] (init) Pairfile: ", pair_file)
         for scan in scans:
             # read the pair file
             with open(pair_file) as f:
@@ -87,26 +87,6 @@ class MVSDataset(Dataset):
         np_img = np.array(img, dtype=np.float32) / 255.
         return np_img
 
-    # def crop_img(self, img):
-    #     raw_h, raw_w = img.shape[:2]
-    #     start_h = (raw_h-1024)//2
-    #     start_w = (raw_w-1280)//2
-    #     return img[start_h:start_h+1024, start_w:start_w+1280, :]  # 1024, 1280, C
-
-    # def prepare_img(self, hr_img):
-    #     h, w = hr_img.shape         # image should arrive at 1024x1280
-    #     if not self.use_raw_train:
-    #         # w1600-h1200-> 800-600 ; crop -> 640, 512; downsample 1/4 -> 160, 128
-    #         # downsample
-    #         hr_img_ds = cv2.resize(hr_img, (w//2, h//2), interpolation=cv2.INTER_NEAREST)
-    #         h, w = hr_img_ds.shape
-    #         target_h, target_w = 512, 640
-    #         start_h, start_w = (h - target_h)//2, (w - target_w)//2
-    #         hr_img_crop = hr_img_ds[start_h: start_h + target_h, start_w: start_w + target_w]
-    #     elif self.use_raw_train:
-    #         hr_img_crop = hr_img[h//2-1024//2:h//2+1024//2, w//2-1280//2:w//2+1280//2]  # 1024, 1280, c
-    #     return hr_img_crop
-
     def read_mask_hr(self, filename):        
         img = Image.open(filename)
         np_img = np.array(img, dtype=np.float32)
@@ -138,7 +118,7 @@ class MVSDataset(Dataset):
         
         # use only the reference view and first nviews-1 source views
         scan, light_idx, ref_view, src_views = meta
-        if DEBUG: print("[MVSDataset] meta:",meta)
+        # if DEBUG: print("[DATALOADER] meta:",meta)
         
         # Select ref view and src_views (event. using random training)
         if self.mode == 'train' and self.rt:
@@ -157,68 +137,63 @@ class MVSDataset(Dataset):
         depth_values = None
         proj_matrices = []
         
+        
+        # Setting suffix for input folders, H & W are just to assert dimensions
+        if self.use_raw_train:
+            suffix = "_1024x1280"
+            H, W = 1024, 1280
+            print ("use_raw should not be used for training")
+            exit()
+        else:
+            suffix = "_512x640"
+            H, W = 512, 640
+        
+        # Read mask only once
+        mask_filename_hr = os.path.join(self.datapath, 'Depths'+suffix, '{}/depth_mask_{:0>3}.png'.format(scan, ref_view))         
+        mask_ms = self.read_mask_hr(mask_filename_hr)
+        h, w = mask_ms["stage4"].shape[:2]
+        assert (h, w) == (H, W), "Image dimension doubtful. Please generate masks with dims {}x{} !".format(H, W)
+        # if DEBUG:
+        #     print("[DATALOADER] mask dims:", mask_ms["stage4"].shape) 
+        
+        # Read depth only once
+        depth_filename_hr = os.path.join(self.datapath, 'Depths'+suffix, '{}/depth_map_{:0>3}.pfm'.format(scan, ref_view))
+        depth_ms = self.read_depth_hr(depth_filename_hr, scale)
+        h, w = depth_ms["stage4"].shape[:2]
+        assert (h, w) == (H, W), "Image dimension doubtful. Please generate depthmaps with dims {}x{} !".format(H, W)
+        # if DEBUG:
+        #     print("[DATALOADER] depth dims:", depth_ms["stage4"].shape)
+            
         # Read all ref and associated src images as stated in "pair.txt" 
         for i, vid in enumerate(view_ids):                        
             
-            if DEBUG: print("[MVSDataset] GET_ITEM: idx=",i)
+            # if DEBUG: print("[DATALOADER] GET_ITEM: idx=",i)
                 
-            # Setting suffix for input folders, H & W are just to assert dimensions
-            if self.use_raw_train:
-                suffix = "_1024x1280"
-                H, W = 1024, 1280
-                print ("use_raw should not be used for training")
-                exit()
-            else:
-                suffix = "_512x640"
-                H, W = 512, 640
-            
             # Define filenames
             # NOTE: Blender image filenames are from 0 to N-1 (not 1~N)
             img_filename = os.path.join(self.datapath, 'Rectified'+suffix, '{}/rect_C{:0>3}_L{:0>2}.png'.format(scan, vid, light_idx))
-            mask_filename_hr = os.path.join(self.datapath, 'Depths'+suffix, '{}/depth_mask_{:0>3}.png'.format(scan, vid)) 
-            depth_filename_hr = os.path.join(self.datapath, 'Depths'+suffix, '{}/depth_map_{:0>3}.pfm'.format(scan, vid))
             proj_mat_filename = os.path.join(self.datapath, 'Cameras'+suffix, '{:0>8}_cam.txt').format(vid) 
             
-            if DEBUG:
-                print("[MVSDataset] GET_ITEM: filenames:")
-                print (img_filename)
-                print (mask_filename_hr)
-                print (depth_filename_hr)
-                print (proj_mat_filename)
+            # if DEBUG:
+            #     print("[DATALOADER] GET_ITEM: filenames:")
+            #     print (img_filename)
+            #     print (mask_filename_hr)
+            #     print (depth_filename_hr)
+            #     print (proj_mat_filename)
             
             # Read image and process images if required
             img = self.read_img(img_filename)
             h, w = img.shape[:2]
             assert (h, w) == (H, W), "Image dimension doubtful. Please generate images with dims {}x{} !".format(H, W)
-            if DEBUG: print("[MVSDataset] read img dims:", img.shape)
+            # if DEBUG: print("[DATALOADER] read img dims:", img.shape)
                 
             # Read camera parameters
             intrinsics, extrinsics, depth_min, depth_interval = self.read_cam_file(proj_mat_filename)
-            if DEBUG: print("[MVSDataset] read intrinsics:\n", intrinsics)
+            # if DEBUG: print("[DATALOADER] read intrinsics:\n", intrinsics)
             
             # Adjust extrinsics translation vector if robust training  
             if self.rt:
                 extrinsics[:3,3] *= scale
-
-            # Read mask and depth only once
-            if i == 0:
-                # Read depth & mask
-                mask_ms = self.read_mask_hr(mask_filename_hr)
-                h, w = mask_ms["stage4"].shape[:2]
-                assert (h, w) == (H, W), "Image dimension doubtful. Please generate masks with dims {}x{} !".format(H, W)
-                    
-                # get depth values
-                depth_ms = self.read_depth_hr(depth_filename_hr, scale)
-                h, w = depth_ms["stage4"].shape[:2]
-                assert (h, w) == (H, W), "Image dimension doubtful. Please generate depthmaps with dims {}x{} !".format(H, W)
-                if DEBUG:
-                    print("[MVSDataset] mask dims:", mask_ms["stage4"].shape)
-                    print("[MVSDataset] depth dims:", depth_ms["stage4"].shape)
-                    
-                # Calculate depth virtual planes distances
-                depth_max = depth_interval * self.ndepths + depth_min
-                depth_values = np.array([depth_min * scale, depth_max * scale], dtype=np.float32) # Is this correct?
-                # depth_values = np.arange(depth_min, depth_min + depth_interval * self.ndepths, depth_interval, dtype=np.float32) # trial OLI
 
             # Read mask and depth for ref image
             proj_mat = np.zeros(shape=(2, 4, 4), dtype=np.float32)
@@ -227,6 +202,11 @@ class MVSDataset(Dataset):
             proj_matrices.append(proj_mat)
             imgs.append(img.transpose(2,0,1))
 
+        # Calculate depth virtual planes distances
+        depth_max = depth_interval * self.ndepths + depth_min
+        depth_values = np.array([depth_min * scale, depth_max * scale], dtype=np.float32) # Is this correct?
+        # depth_values = np.arange(depth_min, depth_min + depth_interval * self.ndepths, depth_interval, dtype=np.float32) # trial OLI        
+        
         # create proj_matrices_ms
         proj_matrices = np.stack(proj_matrices)
         stage4_pjmats = proj_matrices.copy()
@@ -243,17 +223,17 @@ class MVSDataset(Dataset):
             "stage3": stage3_pjmats,
             "stage4": stage4_pjmats  
         }
-        if DEBUG:
-            print("[MVSDataset]  ref img dims:",imgs[0].shape) 
-            print("[MVSDataset]  src img dims:",imgs[1].shape) 
+        # if DEBUG:
+        #     print("[DATALOADER]  ref img dims:",imgs[0].shape) 
+        #     print("[DATALOADER]  src img dims:",imgs[1].shape) 
             
-            print("[MVSDataset] stg4 intrinsics:\n", proj_matrices_ms["stage4"][0][1]) 
-            print("[MVSDataset] stg4 depth dims:",depth_ms["stage4"].shape) 
-            print("[MVSDataset] stg4 mask dims:",mask_ms["stage4"].shape) 
+        #     print("[DATALOADER] stg4 intrinsics:\n", proj_matrices_ms["stage4"][0][1]) 
+        #     print("[DATALOADER] stg4 depth dims:",depth_ms["stage4"].shape) 
+        #     print("[DATALOADER] stg4 mask dims:",mask_ms["stage4"].shape) 
             
-            print("[MVSDataset] stg1 intrinsics:\n", proj_matrices_ms["stage1"][0][1]) 
-            print("[MVSDataset] stg1 depth dims:",depth_ms["stage1"].shape) 
-            print("[MVSDataset] stg1 mask dims:",mask_ms["stage1"].shape) 
+        #     print("[DATALOADER] stg1 intrinsics:\n", proj_matrices_ms["stage1"][0][1]) 
+        #     print("[DATALOADER] stg1 depth dims:",depth_ms["stage1"].shape) 
+        #     print("[DATALOADER] stg1 mask dims:",mask_ms["stage1"].shape) 
             
         return {"imgs": imgs,                       # list of imgs: (Nv C H W)
                 "proj_matrices": proj_matrices_ms,  # dict: 4 stages of (Nv 2 4 4)
