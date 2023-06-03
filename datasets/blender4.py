@@ -22,9 +22,12 @@ class MVSDataset(Dataset):
         self.use_raw_train = kwargs.get("use_raw_train", False)
         self.color_augment = transforms.ColorJitter(saturation = 0.4 , contrast=0.5, brightness=0.6, hue=0.01)
         self.pair_fname = kwargs.get("pair_fname", "pair.txt")
-        self.lightings = kwargs.get("lightings", 7)
+        Nlights_str = kwargs.get("Nlights", "1:1")
+        self.Nlights = int(Nlights_str.split(":")[0].replace("(","").replace(")",""))
+        self.TotLights = int(Nlights_str.split(":")[1])
         
         assert self.mode in ["train", "val", "test"]
+        
         self.metas = self.build_list()
 
     def build_list(self):
@@ -32,17 +35,6 @@ class MVSDataset(Dataset):
         with open(self.listfile) as f:
             scans = f.readlines()
             scans = [line.rstrip() for line in scans]
-        
-        # Manage multiple of single light sources
-        if self.lightings > 0: # if positive number, then light_idx will iterate 
-            light_srcs_qty = self.lightings
-            light_offset = 0
-        elif self.lightings < 0: # if negative number, then light_idx will be a fixed value
-            light_srcs_qty = 1
-            light_offset = -self.lightings
-        elif self.lightings == 0: # if null, then light_idx is set to 3 
-            light_srcs_qty = 1
-            light_offset = 3        
         
         # Load pair data
         pair_file = os.path.join(self.datapath, self.pair_fname)
@@ -53,13 +45,27 @@ class MVSDataset(Dataset):
             with open(pair_file) as f:
                 num_viewpoint = int(f.readline())
                 # viewpoints (49)
-                for view_idx in range(num_viewpoint):
+                for _ in range(num_viewpoint):  
                     ref_view = int(f.readline().rstrip())
                     src_views = [int(x) for x in f.readline().rstrip().split()[1::2]]
-                    # light conditions 0-6
-                    for light_idx in range(light_srcs_qty):
-                        metas.append((scan, light_idx+light_offset, ref_view, src_views))
-        # print("dataset", self.mode, "metas:", len(metas))
+                    # light conditions 
+                    if self.Nlights == 0:
+                        metas.append((scan, 0, ref_view, src_views))
+                    elif self.Nlights < 0:
+                        metas.append((scan, -self.Nlights, ref_view, src_views))
+                    else:                
+                        if self.mode == "val":
+                            assert self.Nlights >= 2, "Eval number of lights must be >2 " 
+                            Nlights_val = random.sample(range(self.Nlights), k=2) # sample w/o replacements
+                            for light_idx in Nlights_val:    
+                                metas.append((scan, light_idx, ref_view, src_views))                            
+                        else:
+                            assert self.Nlights <= self.TotLights, "Training number of lights must be < total number of lights in dataset" 
+                            Nlights_train = random.sample(range(self.TotLights), k=self.Nlights) # sample w/o replacements
+                            for light_idx in Nlights_train:    
+                                metas.append((scan, light_idx, ref_view, src_views))
+                                
+        print("[DataLoader] Mode:{}, Ncams:{}, #metas:{} ".format(self.mode, num_viewpoint, len(metas)))
         return metas
 
     def __len__(self):

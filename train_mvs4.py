@@ -27,7 +27,8 @@ parser.add_argument('--testlist', help='test list')
 parser.add_argument('--pair_fname', default='pair.txt', help='view pair combination filename')
 parser.add_argument('--train_nviews', type=int, default=5, help='number of source views to use during training')
 parser.add_argument('--test_nviews', type=int, default=5, help='number of source views to use during testing')
-parser.add_argument('--Nlights', type=int, default=7, help='number of light sources in dataset (if positive: iterate on multiple lights, if negative: single light with specified value, if null: single light w value 3)')
+# parser.add_argument('--Nlights', type=int, default=7, help='number of light sources in dataset (if positive: iterate on multiple lights, if negative: single light with specified value, if null: single light w value 3)')
+parser.add_argument("--Nlights", type=str, default="1:1", help="Number of lights used for training out of total number lights in image dataset (default: '1:1')")
 
 parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train')
 parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
@@ -132,7 +133,7 @@ def train(model, model_loss, optimizer, TrainImgLoader, TestImgLoader, start_epo
 
 
     for epoch_idx in range(start_epoch, args.epochs):
-        print('Epoch {}:'.format(epoch_idx))
+        print('Epoch {}:'.format(epoch_idx+1))
         global_step = len(TrainImgLoader) * epoch_idx
 
         # training
@@ -151,13 +152,14 @@ def train(model, model_loss, optimizer, TrainImgLoader, TestImgLoader, start_epo
             # STEP LR
             lr_scheduler.step()
             
+            # train
             if (not is_distributed) or (dist.get_rank() == 0):
                 if do_summary:
                     save_scalars(logger, 'train', scalar_outputs, global_step)
                     save_images(logger, 'train', image_outputs, global_step)
                     print(
-                       "Epoch {}/{}, Iter {}/{}, lr {:.6f}, loss = {:.3f}, abs.depth.err.={:.2f}, Thres1/2/4/8mmm=({:.1f}%,{:.1f}%,{:.1f}%,{:.1f}%), mono_loss=({:.1f},{:.1f},{:.1f},{:.1f}), stg_loss=({:.1f},{:.1f},{:.1f},{:.1f}), range_err=({:.2f},{:.2f},{:.2f},{:.2f}), time = {:.3f}".format(
-                           epoch_idx, args.epochs, batch_idx, len(TrainImgLoader),
+                       "Epoch:{}/{}, Train iter:{}/{}, lr={:.2E}, loss={:.3f}, abs.depth.err.={:.2f}, Thres1/2/4/8mmm=({:.1f}%,{:.1f}%,{:.1f}%,{:.1f}%), mono_loss=({:.1f},{:.1f},{:.1f},{:.1f}), stg_loss=({:.1f},{:.1f},{:.1f},{:.1f}), range_err=({:.2f},{:.2f},{:.2f},{:.2f}), time = {:.3f}".format(
+                           epoch_idx+1, args.epochs, batch_idx, len(TrainImgLoader),
                            optimizer.param_groups[0]["lr"], 
                            loss,
                            scalar_outputs["abs_depth_error"],
@@ -179,6 +181,7 @@ def train(model, model_loss, optimizer, TrainImgLoader, TestImgLoader, start_epo
                            scalar_outputs["s3_range_err_ratio"],
                            time.time() - start_time))
                     sys.stdout.flush()
+                    
                 del scalar_outputs, image_outputs                
                 
 
@@ -207,8 +210,8 @@ def train(model, model_loss, optimizer, TrainImgLoader, TestImgLoader, start_epo
                         save_scalars(logger, 'test', scalar_outputs, global_step)
                         save_images(logger, 'test', image_outputs, global_step)
                         print(
-                        "Epoch {}/{}, Iter {}/{}, lr {:.6f}, loss = {:.3f}, abs.depth.err.={:.2f}, Thres1/2/4/8mmm=({:.1f}%,{:.1f}%,{:.1f}%,{:.1f}%), mono_loss=({:.1f},{:.1f},{:.1f},{:.1f}), stg_loss=({:.1f},{:.1f},{:.1f},{:.1f}), range_err=({:.2f},{:.2f},{:.2f},{:.2f}), time = {:.3f}".format(
-                            epoch_idx, args.epochs, batch_idx, len(TestImgLoader),
+                        "Epoch:{}/{}, Eval iter:{}/{}, lr={:.2E}, loss={:.3f}, abs.depth.err.={:.2f}, Thres1/2/4/8mmm=({:.1f}%,{:.1f}%,{:.1f}%,{:.1f}%), mono_loss=({:.1f},{:.1f},{:.1f},{:.1f}), stg_loss=({:.1f},{:.1f},{:.1f},{:.1f}), range_err=({:.2f},{:.2f},{:.2f},{:.2f}), time = {:.3f}".format(
+                            epoch_idx+1, args.epochs, batch_idx, len(TestImgLoader),
                             optimizer.param_groups[0]["lr"], 
                             loss,
                             scalar_outputs["abs_depth_error"],
@@ -228,26 +231,9 @@ def train(model, model_loss, optimizer, TrainImgLoader, TestImgLoader, start_epo
                             scalar_outputs["s1_range_err_ratio"],
                             scalar_outputs["s2_range_err_ratio"],
                             scalar_outputs["s3_range_err_ratio"],
-                            time.time() - start_time))                        
-                        # print(
-                        #     "Epoch {}/{}, Iter {}/{}, lr {:.6f}, test loss = {:.3f}, d_loss = {:.3f}, {:.3f}, {:.3f}, {:.3f}, c_loss = {:.3f}, {:.3f}, {:.3f}, {:.3f}, range_err = {:.3f}, {:.3f}, {:.3f}, {:.3f}, time = {:.3f}".format(
-                        #     epoch_idx, args.epochs, batch_idx, len(TrainImgLoader),
-                        #        optimizer.param_groups[0]["lr"], 
-                        #    loss,
-                        #    scalar_outputs["s0_d_loss"],
-                        #    scalar_outputs["s1_d_loss"],
-                        #    scalar_outputs["s2_d_loss"],
-                        #    scalar_outputs["s3_d_loss"],
-                        #    scalar_outputs["s0_c_loss"],
-                        #    scalar_outputs["s1_c_loss"],
-                        #    scalar_outputs["s2_c_loss"],
-                        #    scalar_outputs["s3_c_loss"],
-                        #    scalar_outputs["s0_range_err_ratio"],
-                        #    scalar_outputs["s1_range_err_ratio"],
-                        #    scalar_outputs["s2_range_err_ratio"],
-                        #    scalar_outputs["s3_range_err_ratio"],
-                        #     time.time() - start_time))
-                        sys.stdout.flush()
+                            time.time() - start_time))     
+                    sys.stdout.flush()                   
+                        
                     avg_test_scalars.update(scalar_outputs)
                     del scalar_outputs, image_outputs              
                     
@@ -261,13 +247,47 @@ def test(model, model_loss, TestImgLoader, args):
     avg_test_scalars = DictAverageMeter()
     for batch_idx, sample in enumerate(TestImgLoader):
         start_time = time.time()
+        
+        logger = SummaryWriter(args.logdir)
+        global_step = batch_idx # using len(TrainImgLoader) to keep pace with training
+        do_summary = global_step % args.summary_freq == 0
+               
         loss, scalar_outputs, image_outputs = test_sample_depth(model, model_loss, sample, args)
         avg_test_scalars.update(scalar_outputs)
-        del scalar_outputs, image_outputs
+        # del scalar_outputs, image_outputs
         if (not is_distributed) or (dist.get_rank() == 0):
-            print('Iter {}/{}, test loss = {:.3f}, time = {:3f}'.format(batch_idx, len(TestImgLoader), loss, time.time() - start_time))
-            if batch_idx % 100 == 0:
-                print("Iter {}/{}, test results = {}".format(batch_idx, len(TestImgLoader), avg_test_scalars.mean()))
+            # print('Iter {}/{}, test loss = {:.3f}, time = {:3f}'.format(batch_idx, len(TestImgLoader), loss, time.time() - start_time))
+            
+            if do_summary:
+                save_scalars(logger, 'test', scalar_outputs, global_step)
+                save_images(logger, 'test', image_outputs, global_step)
+                print(
+                "Epoch:{}/{}, Eval iter:{}/{}, lr={:.2E}, loss={:.3f}, abs.depth.err.={:.2f}, Thres1/2/4/8mmm=({:.1f}%,{:.1f}%,{:.1f}%,{:.1f}%), mono_loss=({:.1f},{:.1f},{:.1f},{:.1f}), stg_loss=({:.1f},{:.1f},{:.1f},{:.1f}), range_err=({:.2f},{:.2f},{:.2f},{:.2f}), time = {:.3f}".format(
+                    1, args.epochs, batch_idx, len(TestImgLoader),
+                    optimizer.param_groups[0]["lr"], 
+                    loss,
+                    scalar_outputs["abs_depth_error"],
+                    scalar_outputs["thres1mm_error"]*100,
+                    scalar_outputs["thres2mm_error"]*100,
+                    scalar_outputs["thres4mm_error"]*100,
+                    scalar_outputs["thres8mm_error"]*100,
+                    scalar_outputs["s0_d_loss"],
+                    scalar_outputs["s1_d_loss"],
+                    scalar_outputs["s2_d_loss"],
+                    scalar_outputs["s3_d_loss"],
+                    scalar_outputs["s0_c_loss"],
+                    scalar_outputs["s1_c_loss"],
+                    scalar_outputs["s2_c_loss"],
+                    scalar_outputs["s3_c_loss"],
+                    scalar_outputs["s0_range_err_ratio"],
+                    scalar_outputs["s1_range_err_ratio"],
+                    scalar_outputs["s2_range_err_ratio"],
+                    scalar_outputs["s3_range_err_ratio"],
+                    time.time() - start_time))  
+            
+            
+            # if batch_idx % 100 == 0:
+            #     print("Iter {}/{}, test results = {}".format(batch_idx, len(TestImgLoader), avg_test_scalars.mean()))
     if (not is_distributed) or (dist.get_rank() == 0):
         print("final", avg_test_scalars.mean())
 
@@ -400,7 +420,7 @@ def test_sample_depth(model, model_loss, sample, args):
                       "s2_range_err_ratio":range_err_ratio[2],
                       "s3_range_err_ratio":range_err_ratio[3],
                       "abs_depth_error": AbsDepthError_metrics(depth_est, depth_gt, mask > 0.5),
-                      "thres2mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 1),
+                      "thres1mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 1),
                       "thres2mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 2),
                       "thres4mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 4),
                       "thres8mm_error": Thres_metrics(depth_est, depth_gt, mask > 0.5, 8),
