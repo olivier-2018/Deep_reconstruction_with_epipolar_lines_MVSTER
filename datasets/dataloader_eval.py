@@ -26,22 +26,24 @@ class MVSDataset(Dataset):
         self.pair_fname = kwargs.get("pair_fname", "pair.txt")
         self.lighting = kwargs.get("lighting", 3)     
         self.dsname = kwargs.get("dsname", "blender")
-        
-        self.metas = self.build_list()
 
-        if self.dsname == "dtu":        
+        if self.dsname == "dtu":     
+            self.pair_path = os.path.join(self.datapath, self.pair_fname)   
             self.img_folder = 'Rectified_raw/{}/rect_{:0>3}_3_r5000.png'
             self.cam_folder = 'Cameras/{:0>8}_cam.txt'
             # self.img_folder = 'Rectified/{}_train/rect_{:0>3}_3_r5000.png'
             # self.cam_folder = 'Cameras/train/{:0>8}_cam.txt'
         elif self.dsname == "blender":
+            self.pair_path = os.path.join(self.datapath, self.pair_fname)
             self.img_folder = 'Rectified'+self.resolution+'/{}/rect_C{:0>3}_L{:0>2}.png'
             self.cam_folder = 'Cameras'+self.resolution+'/{:0>8}_cam.txt'
         elif self.dsname == "bin":
+            self.pair_path = os.path.join(self.datapath, "../..", self.pair_fname)
             self.img_folder = 'Rectified/{}/{:0>8}.png'
-            self.cam_folder = 'Cameras/{}/{:0>8}_cam.txt'
+            self.cam_folder = 'Cameras/{:0>8}_cam.txt'
         
-
+        self.metas = self.build_list()
+        
     def build_list(self):
         metas = []
 
@@ -49,7 +51,7 @@ class MVSDataset(Dataset):
         for scan in self.listfile:
             print ("[DATALOADER] Pair file: ", self.pair_fname)
             # read the pair file
-            with open(os.path.join(self.datapath, self.pair_fname)) as f:
+            with open(self.pair_path) as f:
                 num_viewpoint = int(f.readline())
                 # viewpoints
                 for view_idx in range(num_viewpoint):
@@ -169,6 +171,58 @@ class MVSDataset(Dataset):
         return np_img, intrinsics
 
 
+
+    def read_crop_img(self, img_fname, intrinsics, img_res=(512,640)):
+        
+        base_image_size = 64
+        
+        # Read image
+        img = Image.open(img_fname) #  Colors=RGB
+        w_src, h_src = img.size  # Warning: width first with pillow
+        if DEBUG: print(f"[DATALOADER] img read dims: ({h_src},{w_src})")        
+        
+        # evaluate crop dims 
+        h_target, w_target = img_res
+        if DEBUG: print(f"[DATALOADER] img target dims: ({h_target},{w_target})")    
+        
+        # determine if cropping needed (dims must be compatible with base_image_size)
+        start_h = np.random.randint(h_src//2-h_target, h_src//2)
+        start_w = np.random.randint(w_src//2-w_target, w_src//2)
+        finish_h = start_h + h_target
+        finish_w = start_w + w_target
+        
+        # crop img and intrinsics
+        # img_cropped = img_rescaled[start_h:finish_h, start_w:finish_w] # for numpy
+        croping_dims = (start_w, start_h, finish_w, finish_h)
+        img_cropped = img.crop(croping_dims)  # for pillow
+        if DEBUG: 
+            print(f"[DATALOADER] croping dims: (left, top, right, bottom)={croping_dims}")
+            print(f"[DATALOADER] cropped img dims: ({img_cropped.size[1]}, {img_cropped.size[0]})")
+        
+        # crop intrinsics
+        intrinsics[0,-1] -= start_w
+        intrinsics[1,-1] -= start_h
+        if DEBUG: print("[DATALOADER] Final intrinsics:\n", intrinsics)
+        
+        # convert pillow image to numpy
+        np_img = np.array(img_cropped, dtype=np.float32) / 255.
+        
+        # rescale intrinsics
+        # intrinsics[:2,:] /= 4
+        # if DEBUG: print("[DATALOADER] rescaled intrinsics:\n", intrinsics)
+        
+        # checks shape
+        assert np_img.shape[:2] == img_res
+        
+        # check image has 3 channels (RGB), stack if only 1 channel
+        if len(np_img.shape) == 2:
+            np_img = np.dstack((np_img, np_img, np_img))
+            
+        if DEBUG: print(f"[DATALOADER] final img shape: {np_img.shape}")
+
+        return np_img, intrinsics
+    
+
     def __getitem__(self, idx):
         
         global s_h, s_w
@@ -190,7 +244,7 @@ class MVSDataset(Dataset):
             if self.dsname == "dtu":
                 img_filename = os.path.join(self.datapath, self.img_folder.format(scan, vid+1, self.lighting))
             else:
-                img_filename = os.path.join(self.datapath, self.img_folder.format(scan, vid+1, self.lighting))
+                img_filename = os.path.join(self.datapath, self.img_folder.format(scan, vid, self.lighting))
             proj_mat_filename = os.path.join(self.datapath, self.cam_folder).format(vid)
             
             if DEBUG:
@@ -202,7 +256,8 @@ class MVSDataset(Dataset):
             if DEBUG: print("[DATALOADER] intrinsics read:\n", intrinsics)
                 
             # Read & rescale image input
-            img, intrinsics = self.read_rescale_crop_img(img_filename, intrinsics, (self.max_h, self.max_w))                
+            img, intrinsics = self.read_rescale_crop_img(img_filename, intrinsics, (self.max_h, self.max_w))       
+            # img, intrinsics = self.read_crop_img(img_filename, intrinsics, (self.max_h, self.max_w)) # test to crop without rescaling
 
             if self.dsname == "dtu" and self.cam_folder[:13] == 'Cameras/train':
                 intrinsics[:2] *= 4

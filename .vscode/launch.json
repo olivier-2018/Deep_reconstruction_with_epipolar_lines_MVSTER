@@ -13,16 +13,16 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
+                "--logdir=./outputs/debug/trainDTU2",
                 "--dataset=dtu_yao4",
                 "--trainpath=data/DTU/mvs_training",
-                "--trainlist=lists/dtu/train.txt",
-                "--testlist=lists/dtu/test.txt",
+                "--trainlist=lists/dtu/train10.txt",
+                "--testlist=lists/dtu/test4.txt",
                 "--loadckpt=outputs/DTU_512x640_Nviews5_v2/model_21.ckpt", 
                 "--train_nviews=5",
                 "--test_nviews=5",
-                "--Nlights=7",
+                "--Nlights=-3:7",
                 "--pair_fname=pair.txt",
-                "--logdir=./outputs/debug/trainDTU",
                 "--interval_scale=1.0625",
                 "--ndepths=8,8,4,4",
                 "--depth_inter_r=0.5,0.5,0.5,1",
@@ -35,7 +35,6 @@
                 "--fpn_base_channel=8",
                 "--l1ce_lw=0.003,1",
                 "--lrepochs=4,6,8,9,10,11,12,13,14,16:2",
-                "--batch_size=1",
                 "--summary_freq=10",
                 "--mono", 
                 "--inverse_depth",
@@ -58,14 +57,30 @@
                 "--batch_size=1", 
                 "--datapath=data/DTU/mvs_training", 
                 "--outdir=./outputs/debug/evalDTU", 
-                "--testlist=lists/dtu/test_only1.txt",
+
                 "--loadckpt=outputs/DTU_512x640_Nviews5_v2/model_21.ckpt" , 
                 "--interval_scale=1.0625", 
+
+                // "--testlist=lists/dtu/eval_scan3.txt",   // snowman
+                // "--testlist=lists/dtu/eval_scan4.txt",  // bird pluchy
+                // "--testlist=lists/dtu/eval_scan5.txt",   // cans
+                // "--testlist=lists/dtu/eval_scan9.txt",  // houses
+                // "--testlist=lists/dtu/eval_scan56.txt",  // rabbit
+                // "--testlist=lists/dtu/eval_scan59.txt", // tin can and tea
+                // "--testlist=lists/dtu/eval_scan82.txt", // strumpf
+                "--testlist=lists/dtu/eval_scan106.txt", // love birds
+
+                // "--pair_fname=pair_49x10.txt",
+                // "--pair_fname=eval_pair_4x3_11-12-13-14.txt", 
+                // "--pair_fname=eval_pair_4x3_11-12-17-18.txt", 
+                // "--pair_fname=eval_pair_4x4_11-12-17-18.txt", 
+                // "--pair_fname=eval_pair_4x3_11-13-15-17.txt", 
                 "--pair_fname=eval_pair_4x3_30-32-34-36.txt", 
-                "--max_h=1200",
-                "--max_w=1600",                    
-                // "--max_h=512",
-                // "--max_w=640",
+
+                // "--max_h=1200",
+                // "--max_w=1600",                    
+                "--max_h=512",
+                "--max_w=640",
 
                 "--mono", 
                 "--group_cor" , 
@@ -73,13 +88,14 @@
                 "--inverse_depth",
 
                 "--run_gendepth",
+                "--debug_model=0",          //1:img/FPN, 2:deppth, 4:d_hypos, 8:Attn_w 16: monodepth, 32:warped_views, 64:corr_weight, 128:Attn_weights 
                 "--NviewGen=4",
-                "--depthgen_thres=0.5",
+                "--depthgen_thres=0.9",
                 "--debug_depth_gen=0",      // 1: imgs, 2: depth/masks, 4: view3Dpts, 8: Combi3Dpts, 15: ALL
 
                 "--run_filter",
                 "--NviewFilter=4",
-                "--photomask=0.5" , 
+                "--photomask=0.9" , 
                 "--geomask=2",
                 "--condmask_pixel=1",
                 "--condmask_depth=0.01",
@@ -97,14 +113,16 @@
                 "--dataset=blender4", 
                 "--logdir=./outputs/debug/trainBDS4" , 
                 "--trainpath=data/Blender/BDS4_mvs_train_1024x1280", 
-                "--trainlist=lists/BDS4/train10.txt",
-                "--testlist=lists/BDS4/test4.txt",
+                "--trainlist=lists/BDS4/train.txt",
+                "--testlist=lists/BDS4/test.txt",
                 "--pair_fname=pair_40x10.txt",
                 "--loadckpt=outputs/newBDS4_512x640_rt20pct_10srcs_posenc2/model_41.ckpt", 
                 "--train_nviews=5",
                 "--test_nviews=5",
-                "--Nlights=-3",
+                "--Nlights=-3:7",
                 "--interval_scale=1.45", 
+                "--dataloader_workers=4",
+                "--pin_m",
                 "--ndepths=8,8,4,4",
                 "--depth_inter_r=0.5,0.5,0.5,1", 
                 "--group_cor" ,
@@ -112,7 +130,6 @@
                 "--epochs=16",
                 "--wd=0.0001" ,
                 "--lr=0.000001" ,
-                "--batch_size=1", 
                 "--fpn_base_channel=8",
                 "--l1ce_lw=0.003,1" ,
                 "--lrepochs=8,10,12,14:2" ,
@@ -179,11 +196,16 @@
                 "--trainlist=lists/BDS6/train10.txt",
                 "--testlist=lists/BDS6/test4.txt",
                 "--pair_fname=pair_25x10.txt",
-                "--loadckpt=outputs/newBDS6_512x640_Nviews5_rt20pct10srcs/model_23.ckpt", 
+                // "--loadckpt=outputs/newBDS6_512x640_Nviews5_rt20pct10srcs/model_23.ckpt", 
+                "--loadckpt=outputs/newBDS6_512x640_Nviews5_rt20pct10srcs_posenc2/model_23.ckpt", 
+                // "--loadckpt=outputs/newBDS6_512x640_N5_itvl1.05_rt20pct10srcs_posenc2/model_23.ckpt",  
+                "--pos_enc=2",               
                 "--train_nviews=5",
                 "--test_nviews=5",
-                "--Nlights=-3",
+                "--Nlights=-3:7",
                 "--interval_scale=1.04", 
+                "--dataloader_workers=4",
+                "--pin_m",
                 "--ndepths=8,8,4,4",
                 "--depth_inter_r=0.5,0.5,0.5,1", 
                 "--group_cor" ,
@@ -200,7 +222,6 @@
                 "--mono",
                 "--inverse_depth",
                 "--attn_temp=2", 
-                // "--pos_enc=2",
                 "--rt",
                 "--seed=0",
                 "--debug=0"   // 1:img+feats, 2: depths, 4:hypos, 8:attn_weights, 16:mono_depth
@@ -218,14 +239,14 @@
                 "--dataset_name=blender",
                 "--batch_size=1 ", 
                 "--outdir=./outputs/debug/evalBDS6", 
-                "--datapath=data/Blender/", 
-                "--loadckpt=./outputs//model_23.ckpt" , 
+                "--datapath=data/Blender/BDS6_mvs_train_1024x1280", 
+                "--loadckpt=./outputs/newBDS6_512x640_Nviews5_rt20pct10srcs_posenc2/model_23.ckpt" , 
                 "--interval_scale=1.04", 
                 "--max_h=512",
                 "--max_w=640",
 
-                "--testlist", "lists/BDS6/eval_scene265.txt",
-                // "--testlist", "lists/BDS6/eval_scene275.txt",
+                "--testlist", "lists/BDS6/eval_scene190.txt",
+                // "--testlist", "lists/BDS6/eval_scene200.txt",
                 
                 "--pair_fname", "pair_25x10.txt",
                 // "--pair_fname", "eval_pair_4x4_0-4-20-24.txt",
@@ -241,17 +262,17 @@
                 "--inverse_depth",
 
                 "--run_gendepth",
-                "--NviewGen=4",
+                "--NviewGen=7",
                 "--depthgen_thres=0.1",
-                "--debug_depth_gen=15",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
+                "--debug_depth_gen=0",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
 
                 "--run_filter",
-                "--NviewFilter=4",
+                "--NviewFilter=7",
                 "--photomask=0.1" , 
-                "--geomask=2",
+                "--geomask=3",
                 "--condmask_pixel=1",
                 "--condmask_depth=0.01",
-                "--debug_depth_filter=7"    // 1: depth/masks, 2:view3Dpts, 4:Fused, 7:ALL                   
+                "--debug_depth_filter=4"    // 1: depth/masks, 2:view3Dpts, 4:Fused, 7:ALL                   
             ]
         },
         {
@@ -266,27 +287,29 @@
                 "--dataset=blender4", 
                 "--logdir=./outputs/debug/trainBDS7" , 
                 "--trainpath=data/Blender/BDS7_mvs_train_512x640", 
-                "--trainlist=lists/BDS7/train10.txt",
-                "--testlist=lists/BDS7/test4.txt",
+                "--trainlist=lists/BDS7/train.txt",
+                "--testlist=lists/BDS7/test.txt",
                 "--pair_fname=pair_49x10.txt",
-                // "--loadckpt=outputs/newBDS7_512x640_Nviews5_rt20pct10srcs/model_23.ckpt",  // "--interval_scale=1.55", 
-                "--loadckpt=outputs/newBDS7_512x640_Nviews5_rt20pct10srcs_posenc2/model_47.ckpt",  // "--interval_scale=1.45", 
-                
+                // "--loadckpt=outputs/newBDS7_512x640_Nviews5_rt20pct10srcs/model_23.ckpt",            // "--interval_scale=1.55", 
+                // "--loadckpt=outputs/newBDS7_512x640_Nviews5_rt20pct10srcs_posenc2/model_47.ckpt",       // "--interval_scale=1.45", 
+                "--loadckpt=outputs/newBDS7_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_31.ckpt",   // "--interval_scale=1.34", 
                 "--train_nviews=5",
                 "--test_nviews=5",
                 "--Nlights=-3:7",   //  use (-x):y to request a specific light number x to be used
-                "--interval_scale=1.45", 
+                "--interval_scale=1.34", 
+                "--dataloader_workers=4",
+                "--pin_m",
                 "--ndepths=8,8,4,4",
                 "--depth_inter_r=0.5,0.5,0.5,1", 
                 "--group_cor" ,
                 "--group_cor_dim=8,8,4,4",
                 "--epochs=16",
                 "--wd=0.001" ,
-                "--lr=0.001" ,
+                "--lr=0.0000001" ,
                 "--batch_size=6", 
                 "--fpn_base_channel=8",
                 "--l1ce_lw=0.003,1" ,
-                "--lrepochs=8,10,12,14:2" ,
+                "--lrepochs=1,2,3:2" ,
                 "--batch_size=6" ,
                 "--summary_freq=100" ,
                 "--mono",
@@ -311,28 +334,29 @@
                 "--batch_size=1 ", 
                 "--outdir=./outputs/debug/evalBDS7",
                 "--datapath=data/Blender/BDS7_mvs_train_512x640", 
-                
-                "--loadckpt=outputs/newBDS7_512x640_Nviews5_rt20pct10srcs/model_23.ckpt", 
-                // "--loadckpt=outputs/newBDS7_512x640_Nviews5_rt20pct10srcs_posenc2/model_47.ckpt", 
-                "--interval_scale=1.45", 
+
+                // "--loadckpt=outputs/newBDS7_512x640_Nviews5_rt20pct10srcs/model_23.ckpt",            // "--interval_scale=1.55", 
+                // "--loadckpt=outputs/newBDS7_512x640_Nviews5_rt20pct10srcs_posenc2/model_47.ckpt",       // "--interval_scale=1.45", 
+                "--loadckpt=outputs/newBDS7_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_31.ckpt",   // "--interval_scale=1.34", 
+                "--interval_scale=1.34", 
                 "--max_h=512",
                 "--max_w=640",
-
-                "--testlist=lists/BDS4/test_scene56.txt",
+                
                 // "--testlist", "lists/BDS7/eval_scene160.txt",
                 // "--testlist", "lists/BDS7/eval_scene170.txt",
-                "--testlist", "lists/BDS7/eval_scene175.txt",
+                // "--testlist", "lists/BDS7/eval_scene175.txt",
+                "--testlist", "lists/BDS7/eval_scene177.txt",
                 // "--testlist", "lists/BDS7/eval_scene180.txt",  
                 // "--testlist", "lists/BDS7/eval_scene185.txt", 
 
-                "--pair_fname", "pair_49x10.txt",
+                // "--pair_fname", "pair_49x10.txt",
                 // "--pair_fname", "eval_pair_4x4_0-1-2-3.txt",
                 // "--pair_fname", "eval_pair_4x4_2-3-11-12.txt",
                 // "--pair_fname", "eval_pair_4x4_11-12-15-16.txt",
                 // "--pair_fname", "eval_pair_4x4_19-29-31-33.txt",
                 // "--pair_fname", "eval_pair_4x4_19-34-29-30.txt",
                 // "--pair_fname", "eval_pair_4x4_30-31-33-34.txt",
-                // "--pair_fname", "eval_pair_4x4_44-45-47-48.txt",
+                "--pair_fname", "eval_pair_4x4_44-45-47-48.txt",
 
                 "--mono", 
                 "--group_cor" , 
@@ -341,16 +365,16 @@
 
                 "--run_gendepth",
                 "--NviewGen=4",
-                "--depthgen_thres=0.1",
-                "--debug_depth_gen=15",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
+                "--depthgen_thres=0.5",
+                "--debug_depth_gen=0",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
 
                 "--run_filter",
                 "--NviewFilter=4",
-                "--photomask=0.1" , 
+                "--photomask=0.5" , 
                 "--geomask=2",
                 "--condmask_pixel=1",
                 "--condmask_depth=0.01",
-                "--debug_depth_filter=7"    // 1: depth/masks, 2:view3Dpts, 4:Fused, 7:ALL                   
+                "--debug_depth_filter=4"    // 1: depth/masks, 2:view3Dpts, 4:Fused, 7:ALL                   
             ]
         },
         {
@@ -370,9 +394,9 @@
                 // "--datapath", "data/Bin_picking/2023-02-15_setup_overhead03_mario_w_GT",             // resized to 1024x1280
                 // "--datapath", "data/Bin_picking/2022-07-15_setup_Merlin_Mario_Set_Full_to_Empty", // resized to 1024x1280
                 // "--datapath", "data/Bin_picking/acquisition-2023-02-15-13-41-55",                 // with original img size&intrinsics
-                // "--datapath", "data/Bin_picking/Bin_2048x3072_merlin_calib/2023-02-15_setup_overhead03_mario_w_GT",
+                "--datapath", "data/Bin_picking/Bin_2048x3072_merlin_calib/2023-02-15_setup_overhead03_mario_w_GT",
                 // "--datapath", "data/Bin_picking/Bin_2048x3072_matlab_calib/2023-02-15_setup_overhead03_mario_w_GT_using_MATLAB_calib",
-                "--datapath", "data/Bin_picking/Bin_2048x3072_matlab_calib_test/2023-02-15_setup_overhead03_mario_w_GT_using_MATLAB_calib",
+                // "--datapath", "data/Bin_picking/Bin_2048x3072_matlab_calib_test/2023-02-15_setup_overhead03_mario_w_GT_using_MATLAB_calib",
  
                 // "--testlist", "lists/Bin/eval_scene1.txt",
                 // "--testlist", "lists/Bin/eval_scene2.txt",
@@ -385,11 +409,16 @@
                 // "--pair_fname", "eval_pair_4x3.txt",
                 "--pair_fname", "eval_pair_4x4.txt",
 
-                "--loadckpt=./outputs/newBDS4_512x640_rt20pct_10srcs_posenc2/model_23.ckpt" , 
-                "--pair_fname=pair_eval_15-16-25-26_self.txt", 
-                "--interval_scale=1.45", 
+                // "--loadckpt=./outputs/newBDS4_512x640_rt20pct_10srcs_posenc2/model_23.ckpt" , 
+                // "--interval_scale=1.45", 
+                "--loadckpt=outputs/newBDS7_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_31.ckpt",   // "--interval_scale=1.34", 
+                "--interval_scale=1.34", 
                 "--max_h=512",
-                "--max_w=640",
+                "--max_w=768",
+                // "--max_h=1024",
+                // "--max_w=1280",
+                // "--max_h=2048",
+                // "--max_w=3072",
 
                 "--mono", 
                 "--group_cor" , 
@@ -398,16 +427,16 @@
 
                 "--run_gendepth",
                 "--NviewGen=4",
-                "--depthgen_thres=0.1",
-                "--debug_depth_gen=15",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
+                "--depthgen_thres=0.5",
+                "--debug_depth_gen=7",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
 
                 "--run_filter",
                 "--NviewFilter=4",
-                "--photomask=0.1" , 
+                "--photomask=0.5" , 
                 "--geomask=2",
                 "--condmask_pixel=1",
                 "--condmask_depth=0.01",
-                "--debug_depth_filter=7"    // 1: depth/masks, 2:view3Dpts, 4:Fused, 7:ALL                   
+                "--debug_depth_filter=4"    // 1: depth/masks, 2:view3Dpts, 4:Fused, 7:ALL                   
             ]
         }
     ]

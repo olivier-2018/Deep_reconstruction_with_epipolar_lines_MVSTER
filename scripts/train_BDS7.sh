@@ -13,7 +13,7 @@ TRAINLIST="lists/BDS7/train.txt"
 TESTLIST="lists/BDS7/test.txt"
 PAIRFILE="pair_49x10.txt"
 
-CHKPT="outputs/newBDS7_512x640_Nviews5_rt20pct10srcs_posenc2/model_47.ckpt"
+# CHKPT="outputs/newBDS7_512x640_Nviews5_rt20pct10srcs_posenc2/model_47.ckpt"
 
 exp=$1
 PY_ARGS=${@:2}
@@ -33,18 +33,17 @@ python train_mvs4.py \
 --trainlist $TRAINLIST \
 --testlist $TESTLIST  \
 --pair_fname $PAIRFILE \
---loadckpt $CHKPT \
 --dataset=blender4 \
 --train_nviews 5 \
 --Nlights="3:7" \
 --interval_scale=1.34 \
 --ndepths="8,8,4,4" \
 --depth_inter_r="0.5,0.5,0.5,1" \
---epochs=24 \
+--epochs=32 \
 --lr=0.001 \
 --wd=0.0001 \
 --l1ce_lw="0.003,1" \
---lrepochs="2,3,4,5,6,7,8,9,10,11,12,13,14:1.2" \
+--lrepochs="2,3,4,5,6,7,8,9,10,11,12,13,14,21,22,23,25,27:1.2" \
 --batch_size=6 \
 --summary_freq 100 \
 --group_cor \
@@ -54,6 +53,7 @@ python train_mvs4.py \
 --inverse_depth \
 --attn_temp 2 \
 --pos_enc 2 \
+--resume \
 $PY_ARGS &> $LOG_DIR"/"$LOG_FILE &
 
 # --pos_enc 2 \

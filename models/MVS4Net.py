@@ -86,7 +86,7 @@ class MVS4net(nn.Module):
                 for stg in features[nview_idx].keys():   # Sweep through each stage    
                     cv2.imshow(f"[IMG] {stg}", cv2.cvtColor(img[0].permute(1,2,0).detach().cpu().numpy(), cv2.COLOR_BGR2RGB) ) 
                     Nfeature = features[nview_idx][stg].shape[1]
-                    # print(f"[DEBUG] {stg} filters: {Nfeature}")
+                    # print(f"[DEBUG-MVS4Net] {stg} filters: {Nfeature}")
                     for feat_idx in range(0,Nfeature , Nfeature//8): # Sweep through features
                         feat_img = features[nview_idx][stg][0,feat_idx].detach().cpu().numpy() # (H,W), only use 1st from batch
                         cv2.imshow(f"[FEAT] View:{nview_idx} {stg} Filt:{feat_idx}", NormalizeNumpy(feat_img))
@@ -149,11 +149,12 @@ class MVS4net(nn.Module):
                 feat_ = outputs[stg]["hypo_depth"][0].detach().cpu().numpy()  # only first in batch
                 u,v = feat_[0].shape[0]//2, feat_[0].shape[1]//2  # get middle point
                 N = feat_.shape[0]
-                print(f"[DEPTH HYPO] {stg} Point:{(u,v)} PTmean {np.mean(feat_[:,u,v])} PTmin {np.min(feat_[:,u,v])}, Max {np.max(feat_[:,u,v])}")
                 for feat_idx in range(0, N):   # Sweep through ALL depth hyp : [8,8,4,4] by defaults
                     feat_img = feat_[feat_idx].copy()
                     feat_img = cv2.circle(feat_img, (v,u), 1, (0,0,0), 2)                            
-                    cv2.imshow(f"[DEPTH HYPO] {stg} Filt:{feat_idx}", (feat_img - np.min(feat_)) / (np.max(feat_)-np.min(feat_)) )
+                    cv2.imshow(f"[DEPTH HYPO] {stg} Filt:{feat_idx}", (feat_img - np.min(feat_)) / (np.max(feat_)-np.min(feat_)) )                
+                    print(f"[DEBUG-MVS4Net] DEPTH HYPO {stg} Point:{(u,v)} feat_idx:{feat_idx} Feat.val: {feat_[feat_idx,u,v]}")
+                print(f"[DEBUG-MVS4Net] DEPTH HYPO {stg} Point:{(u,v)} PTmean {np.mean(feat_[0,u,v])} PTmin {np.min(feat_[:,u,v])}, Max {np.max(feat_[:,u,v])}")
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
             # END DEBUG 
@@ -163,7 +164,7 @@ class MVS4net(nn.Module):
                 feat_ = outputs[stg]["attn_weight"][0].detach().cpu().numpy()  # only first in batch
                 u,v = feat_[0].shape[0]//2, feat_[0].shape[1]//2  # get middle point
                 N = feat_.shape[0]
-                print(f"[ATTN] {stg} Point:{(u,v)} PTmean {np.mean(feat_[:,u,v])} PTmin {np.min(feat_[:,u,v])}, Max {np.max(feat_[:,u,v])}")
+                print(f"[DEBUG-MVS4Net] ATTN {stg} Point:{(u,v)} PTmean {np.mean(feat_[:,u,v])} PTmin {np.min(feat_[:,u,v])}, Max {np.max(feat_[:,u,v])}")
                 for feat_idx in range(0, N):   # Sweep through ALL depth hyp : [8,8,4,4] by defaults
                     feat_img = feat_[feat_idx].copy()
                     print(f"[ATTN] {stg} Filt{feat_idx} mean {np.mean(feat_img)} min {np.min(feat_img)}, Max {np.max(feat_img)}")

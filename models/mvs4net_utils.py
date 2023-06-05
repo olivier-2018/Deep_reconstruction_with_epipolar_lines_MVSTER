@@ -1051,7 +1051,7 @@ class stagenet(nn.Module):
             warped_src = homo_warping(src_fea, src_proj_new, ref_proj_new, depth_hypo, self.vis_ETA, save_fn)  # B C D H W
             
             # DEBUG - plot warped views
-            if "14" in get_powers(self.debug): 
+            if "5" in get_powers(self.debug):  # add 32
                 feat_ = warped_src[0]  # only 1st in batch
                 Nfeat, Ndepth = feat_.shape[:2] 
                 for feat in range(0,Nfeat,Nfeat//8):   # Sweep through features
@@ -1085,7 +1085,7 @@ class stagenet(nn.Module):
                 cor_feats += cor_weight.unsqueeze(1) * cor_feat  # B C D H W
             
             # DEBUG - plot correl weights (proba)
-            if "24" in get_powers(self.debug): 
+            if "6" in get_powers(self.debug): # add 64
                 cor_weight_img = cor_weight[0].detach().cpu().numpy() # only 1st in batch
                 for dep in range(cor_weight_img.shape[0]):
                     cv2.imshow(f"[CORREL-WEIGHTS] depth:{dep}", NormalizeNumpy(cor_weight_img[dep]))
@@ -1106,7 +1106,7 @@ class stagenet(nn.Module):
         del cor_feats
         attn_weight = F.softmax(attn_weight, dim=1)  # B D H W
         # DEBUG - plot Attention weights (proba)
-        if "40" in get_powers(self.debug): 
+        if "7" in get_powers(self.debug): # add 128
             attn_weight_img = attn_weight[0].detach().cpu().numpy() # only 1st in batch
             for dep in range(attn_weight_img.shape[0]):
                 cv2.imshow(f"[ATTN-WEIGHTS] depth:{dep}", NormalizeNumpy(attn_weight_img[dep]))

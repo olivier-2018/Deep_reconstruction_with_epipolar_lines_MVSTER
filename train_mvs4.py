@@ -49,6 +49,7 @@ parser.add_argument('--eval_freq', type=int, default=1, help='eval freq')
 
 parser.add_argument('--seed', type=int, default=1, metavar='S', help='set seed. 0 for random. Default to 1 !!')
 parser.add_argument('--pin_m', action='store_true', help='data loader pin memory')
+parser.add_argument('--dataloader_workers', type=int, default=4, help='number of worker nodes for dataloader. Default to 4')
 parser.add_argument("--local_rank", type=int, default=0)
 
 parser.add_argument('--ndepths', type=str, default="8,8,4,4", help='ndepths')
@@ -86,13 +87,16 @@ parser.add_argument('--lr_scheduler', type=str, default='MS')
 parser.add_argument('--ASFF', action='store_true')
 parser.add_argument('--attn_temp', type=float, default=2)
 
-parser.add_argument('--debug', type=int, default=0, help='powers of 2 for switches selection (debug = 2⁰+2¹+2³+2⁴+...) with '
-                    '0: plot input images & FPN4 features (add 1) '
-                    '1: plot depth (add 2) '
-                    '2: plot depth hpothesis (add 4) '
-                    '3: plot attention weights (add 8) '
-                    '4: plot mono depths (add 16) '
-                    '5:  (add 32) '
+parser.add_argument('--debug_model', type=int, default=0, help='powers of 2 for switches selection (debug = 2⁰+2¹+2³+2⁴+...) with '
+                    '0: MVS4Net, plot input images & FPN4 features (add 1) '
+                    '1: MVS4Net,plot depth (add 2) '
+                    '2: MVS4Net,plot depth hpothesis (add 4) '
+                    '3: MVS4Net,plot attention weights (add 8) '
+                    '4: MVS4Net,plot mono depths (add 16) '
+                    '5: StageNet, plot warped views(add 32) '
+                    '6: StageNet, plot correl weights on depth hypos for each stage (add 64) '
+                    '7: StageNet, plot Attention weights on depth hypos for each stage (add 128) '
+                    '8: StageNet, (add 256) '
                     '63: ALL')
 
 
@@ -320,6 +324,12 @@ def train_sample(model, model_loss, optimizer, sample, args):
     
     mask_errormap_2mm = (errormap < 2.0) * 1.0
     mask_errormap_2mm[mask<0.5] = 0.0
+        
+    mask_errormap_4mm = (errormap < 4.0) * 1.0
+    mask_errormap_4mm[mask<0.5] = 0.0
+        
+    mask_errormap_8mm = (errormap < 8.0) * 1.0
+    mask_errormap_8mm[mask<0.5] = 0.0
     
     # LOSS EVALUATION
     loss, stage_d_loss, stage_c_loss, range_err_ratio = model_loss(
@@ -364,7 +374,8 @@ def train_sample(model, model_loss, optimizer, sample, args):
                      "errormap": errormap,
                      "errormap_1mm_mask": mask_errormap_1mm,
                      "errormap_2mm_mask": mask_errormap_2mm,
-                     "mask": sample["mask"]["stage1"],
+                     "errormap_4mm_mask": mask_errormap_4mm,
+                     "errormap_8mm_mask": mask_errormap_8mm,
                      }
 
     if is_distributed:
@@ -397,7 +408,13 @@ def test_sample_depth(model, model_loss, sample, args):
     mask_errormap_1mm[mask<0.5] = 0.0
     
     mask_errormap_2mm = (errormap < 2.0) * 1.0
-    mask_errormap_2mm[mask<0.5] = 0.0
+    mask_errormap_2mm[mask<0.5] = 0.0    
+    
+    mask_errormap_4mm = (errormap < 4.0) * 1.0
+    mask_errormap_4mm[mask<0.5] = 0.0  
+      
+    mask_errormap_8mm = (errormap < 8.0) * 1.0
+    mask_errormap_8mm[mask<0.5] = 0.0
 
     loss, stage_d_loss, stage_c_loss, range_err_ratio = model_loss(
                                         outputs, depth_gt_ms, mask_ms, stage_lw=[float(e) for e in args.dlossw.split(",") if e], 
@@ -435,7 +452,8 @@ def test_sample_depth(model, model_loss, sample, args):
                      "errormap": errormap,
                      "errormap_1mm_mask": mask_errormap_1mm,
                      "errormap_2mm_mask": mask_errormap_2mm,
-                     "mask": sample["mask"]["stage1"],
+                     "errormap_4mm_mask": mask_errormap_4mm,
+                     "errormap_8mm_mask": mask_errormap_8mm,
                      }
     
     if is_distributed:
@@ -500,7 +518,8 @@ if __name__ == '__main__':
                     mono_stg_itrpl=args.mono_stg_itrpl,
                     asff=args.ASFF,
                     attn_temp=args.attn_temp,
-                    vis_stg_features=False
+                    vis_stg_features=False, 
+                    debug=args.debug_model
                 )
 
     model.to(device)
@@ -558,25 +577,25 @@ if __name__ == '__main__':
     MVSDataset = find_dataset_def(args.dataset)
     
     if args.dataset.startswith('dtu'):
-        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, args.interval_scale, rt=args.rt,  use_raw_train=args.use_raw_train,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
-        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews, args.interval_scale,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
+        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, args.interval_scale, rt=args.rt,  use_raw_train=args.use_raw_train,pair_fname=args.pair_fname,Nlights=args.Nlights)
+        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews, args.interval_scale,pair_fname=args.pair_fname,Nlights=args.Nlights)
     elif args.dataset.startswith('blendedmvs'):
-        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, robust_train=args.rt,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
-        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
+        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, robust_train=args.rt,pair_fname=args.pair_fname,Nlights=args.Nlights)
+        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews,pair_fname=args.pair_fname,Nlights=args.Nlights)
     else:
-        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, args.interval_scale, rt=args.rt, use_raw_train=args.use_raw_train,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
-        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews, args.interval_scale,pair_fname=args.pair_fname,Nlights=args.Nlights,debug=args.debug)
+        train_dataset = MVSDataset(args.trainpath, args.trainlist, "train", args.train_nviews, args.interval_scale, rt=args.rt, use_raw_train=args.use_raw_train,pair_fname=args.pair_fname,Nlights=args.Nlights)
+        test_dataset = MVSDataset(args.testpath, args.testlist, "val", args.test_nviews, args.interval_scale,pair_fname=args.pair_fname,Nlights=args.Nlights)
         
     # dataloader
     if is_distributed:
         train_sampler = torch.utils.data.DistributedSampler(train_dataset, num_replicas=dist.get_world_size(), rank=dist.get_rank())
         test_sampler = torch.utils.data.DistributedSampler(test_dataset, num_replicas=dist.get_world_size(), rank=dist.get_rank())
 
-        TrainImgLoader = DataLoader(train_dataset, args.batch_size, sampler=train_sampler, num_workers=1, drop_last=True, pin_memory=args.pin_m)
-        TestImgLoader = DataLoader(test_dataset, args.batch_size, sampler=test_sampler, num_workers=1, drop_last=False, pin_memory=args.pin_m)
+        TrainImgLoader = DataLoader(train_dataset, args.batch_size, sampler=train_sampler, num_workers=args.dataloader_workers, drop_last=True, pin_memory=args.pin_m)
+        TestImgLoader = DataLoader(test_dataset, args.batch_size, sampler=test_sampler, num_workers=args.dataloader_workers, drop_last=False, pin_memory=args.pin_m)
     else:
-        TrainImgLoader = DataLoader(train_dataset, args.batch_size, shuffle=True, num_workers=1, drop_last=True, pin_memory=args.pin_m)
-        TestImgLoader = DataLoader(test_dataset, args.batch_size, shuffle=False, num_workers=1, drop_last=False, pin_memory=args.pin_m)
+        TrainImgLoader = DataLoader(train_dataset, args.batch_size, shuffle=True, num_workers=args.dataloader_workers, drop_last=True, pin_memory=args.pin_m)
+        TestImgLoader = DataLoader(test_dataset, args.batch_size, shuffle=False, num_workers=args.dataloader_workers, drop_last=False, pin_memory=args.pin_m)
 
 
     if args.mode == "train":

@@ -97,12 +97,16 @@ parser.add_argument('--attn_temp', type=float, default=2)
 
 # Debug options
 parser.add_argument('--debug_model', type=int, default=0, help='powers of 2 for switches selection (debug = 2⁰+2¹+2³+2⁴+...) with '
-                    '0: plot features (add 1) '
-                    '1: plot stage0 depth & photo confidence (add 2) '
-                    '2: (add 4) '
-                    '3:  (add 8) '
-                    '4:  (add 16) '
-                    '5:  (add 32) ')
+                    '0: MVS4Net, plot input images & FPN4 features (add 1) '
+                    '1: MVS4Net,plot depth (add 2) '
+                    '2: MVS4Net,plot depth hpothesis (add 4) '
+                    '3: MVS4Net,plot attention weights (add 8) '
+                    '4: MVS4Net,plot mono depths (add 16) '
+                    '5: StageNet, plot warped views(add 32) '
+                    '6: StageNet, plot correl weights on depth hypos for each stage (add 64) '
+                    '7: StageNet, plot Attention weights on depth hypos for each stage (add 128) '
+                    '8: StageNet, (add 256) '
+                    '63: ALL')
 
 parser.add_argument('--debug_depth_gen', type=int, default=0, help='powers of 2 for switches selection (debug = 2⁰+2¹+2³+2⁴+...) with '
                     '0: plot input image (add 1) '
@@ -377,7 +381,7 @@ def save_scene_depth(testlist):
                     attn_temp=args.attn_temp,
                     vis_ETA=args.vis_ETA,
                     vis_stg_features=args.vis_stg_features,
-                    debug=0
+                    debug=args.debug_model, 
                 )
     
     # load checkpoint file specified by args.loadckpt
@@ -411,10 +415,10 @@ def save_scene_depth(testlist):
             filenames = sample["filename"]
             cams = sample["proj_matrices"]["stage{}".format(num_stage)].numpy()
             imgs = tensor2numpy(sample["imgs"]) 
-            print('=== Iter {}/{}, Ref view: {} Src views: {} Time:{:.3f} '.format(batch_idx, 
+            print('=== Iter {}/{}, Ref view: {} Src views: {} FwdPassTime:{:.3f} '.format(batch_idx+1, 
                                                                                      len(TestImgLoader), 
-                                                                                     test_dataset.metas[0][1], 
-                                                                                     test_dataset.metas[0][2],
+                                                                                     test_dataset.metas[batch_idx][1], 
+                                                                                     test_dataset.metas[batch_idx][2][:args.NviewGen-1],
                                                                                      end_time - start_time
                                                                                      ))
             sys.stdout.flush()
@@ -513,7 +517,8 @@ def save_scene_depth(testlist):
                 # Create 3D points cloud     
                 xyz_world = depth2pts_np(depth_est, ref_intrinsics, ref_extrinsics) # all points
                 xyz_world_masked = xyz_world[photo_conf_mask.flatten()==1]
-                xyz_color_masked = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)[photo_conf_mask==1]/255       
+                # xyz_color_masked = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)[photo_conf_mask==1]/255       
+                xyz_color_masked = img[photo_conf_mask==1]/255       
                 
                 # Add to global point cloud
                 vertices.append(xyz_world_masked)
@@ -680,6 +685,8 @@ def filter_depth(scene_folder):
     # for each reference view and the corresponding source views
     for ref_view, src_views in pair_data:
         
+        start_time = time.time()
+        
         src_views = src_views[:args.NviewFilter-1]        
         print (f'[FILTER] ref_view: {ref_view} src_views: {src_views}')
         
@@ -733,15 +740,16 @@ def filter_depth(scene_folder):
         # compute final mask
         final_mask = np.logical_and(photo_mask, geo_mask)
 
+        print("processing {}, ref-view{:0>2}, photo/geo/final-mask:{:.2f}/{:.2f}/{:.2f}, FusionTime={:.3f}sec".format(scene_folder, ref_view,
+                                                                                                photo_mask.mean()*100,
+                                                                                                geo_mask.mean()*100, 
+                                                                                                final_mask.mean()*100,
+                                                                                                time.time()-start_time))
+        
         os.makedirs(os.path.join(scene_folder, "mask"), exist_ok=True)
         save_mask(os.path.join(scene_folder, "mask/{:0>8}_photo.png".format(ref_view)), photo_mask)
         save_mask(os.path.join(scene_folder, "mask/{:0>8}_geo.png".format(ref_view)), geo_mask)
         save_mask(os.path.join(scene_folder, "mask/{:0>8}_final.png".format(ref_view)), final_mask)
-
-        print("processing {}, ref-view{:0>2}, photo/geo/final-mask:{:.2f}/{:.2f}/{:.2f}".format(scene_folder, ref_view,
-                                                                                                photo_mask.mean()*100,
-                                                                                                geo_mask.mean()*100, 
-                                                                                                final_mask.mean()*100))
         
         #  DEBUG: plot depth with masks
         if '0' in get_powers(args.debug_depth_filter): # add 1

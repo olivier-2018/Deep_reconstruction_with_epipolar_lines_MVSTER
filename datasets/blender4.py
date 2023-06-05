@@ -159,43 +159,43 @@ class MVSDataset(Dataset):
         mask_ms = self.read_mask_hr(mask_filename_hr)
         h, w = mask_ms["stage4"].shape[:2]
         assert (h, w) == (H, W), "Image dimension doubtful. Please generate masks with dims {}x{} !".format(H, W)
-        # if DEBUG:
-        #     print("[DATALOADER] mask dims:", mask_ms["stage4"].shape) 
+        if DEBUG:
+            print("[DATALOADER] mask dims:", mask_ms["stage4"].shape) 
         
         # Read depth only once
         depth_filename_hr = os.path.join(self.datapath, 'Depths'+suffix, '{}/depth_map_{:0>3}.pfm'.format(scan, ref_view))
         depth_ms = self.read_depth_hr(depth_filename_hr, scale)
         h, w = depth_ms["stage4"].shape[:2]
         assert (h, w) == (H, W), "Image dimension doubtful. Please generate depthmaps with dims {}x{} !".format(H, W)
-        # if DEBUG:
-        #     print("[DATALOADER] depth dims:", depth_ms["stage4"].shape)
+        if DEBUG:
+            print("[DATALOADER] depth dims:", depth_ms["stage4"].shape)
             
         # Read all ref and associated src images as stated in "pair.txt" 
         for i, vid in enumerate(view_ids):                        
             
-            # if DEBUG: print("[DATALOADER] GET_ITEM: idx=",i)
+            if DEBUG: print("[DATALOADER] GET_ITEM: idx=",i)
                 
             # Define filenames
             # NOTE: Blender image filenames are from 0 to N-1 (not 1~N)
-            img_filename = os.path.join(self.datapath, 'Rectified'+suffix, '{}/rect_C{:0>3}_L{:0>2}.png'.format(scan, vid, light_idx))
+            img_filename = os.path.join(self.datapath, 'Rectified'+suffix, '{}/rect_C{:0>3}_L{:0>2}.png'.format(scan, vid, light_idx))            
             proj_mat_filename = os.path.join(self.datapath, 'Cameras'+suffix, '{:0>8}_cam.txt').format(vid) 
             
-            # if DEBUG:
-            #     print("[DATALOADER] GET_ITEM: filenames:")
-            #     print (img_filename)
-            #     print (mask_filename_hr)
-            #     print (depth_filename_hr)
-            #     print (proj_mat_filename)
+            if DEBUG:
+                print("[DATALOADER] GET_ITEM: filenames:")
+                print (img_filename)
+                print (mask_filename_hr)
+                print (depth_filename_hr)
+                print (proj_mat_filename)
             
             # Read image and process images if required
             img = self.read_img(img_filename)
             h, w = img.shape[:2]
             assert (h, w) == (H, W), "Image dimension doubtful. Please generate images with dims {}x{} !".format(H, W)
-            # if DEBUG: print("[DATALOADER] read img dims:", img.shape)
+            if DEBUG: print("[DATALOADER] read img dims:", img.shape)
                 
             # Read camera parameters
             intrinsics, extrinsics, depth_min, depth_interval = self.read_cam_file(proj_mat_filename)
-            # if DEBUG: print("[DATALOADER] read intrinsics:\n", intrinsics)
+            if DEBUG: print("[DATALOADER] read intrinsics:\n", intrinsics)
             
             # Adjust extrinsics translation vector if robust training  
             if self.rt:
@@ -229,17 +229,17 @@ class MVSDataset(Dataset):
             "stage3": stage3_pjmats,
             "stage4": stage4_pjmats  
         }
-        # if DEBUG:
-        #     print("[DATALOADER]  ref img dims:",imgs[0].shape) 
-        #     print("[DATALOADER]  src img dims:",imgs[1].shape) 
+        if DEBUG:
+            print("[DATALOADER]  ref img dims:",imgs[0].shape) 
+            print("[DATALOADER]  src img dims:",imgs[1].shape) 
             
-        #     print("[DATALOADER] stg4 intrinsics:\n", proj_matrices_ms["stage4"][0][1]) 
-        #     print("[DATALOADER] stg4 depth dims:",depth_ms["stage4"].shape) 
-        #     print("[DATALOADER] stg4 mask dims:",mask_ms["stage4"].shape) 
+            print("[DATALOADER] stg4 intrinsics:\n", proj_matrices_ms["stage4"][0][1]) 
+            print("[DATALOADER] stg4 depth dims:",depth_ms["stage4"].shape) 
+            print("[DATALOADER] stg4 mask dims:",mask_ms["stage4"].shape) 
             
-        #     print("[DATALOADER] stg1 intrinsics:\n", proj_matrices_ms["stage1"][0][1]) 
-        #     print("[DATALOADER] stg1 depth dims:",depth_ms["stage1"].shape) 
-        #     print("[DATALOADER] stg1 mask dims:",mask_ms["stage1"].shape) 
+            print("[DATALOADER] stg1 intrinsics:\n", proj_matrices_ms["stage1"][0][1]) 
+            print("[DATALOADER] stg1 depth dims:",depth_ms["stage1"].shape) 
+            print("[DATALOADER] stg1 mask dims:",mask_ms["stage1"].shape) 
             
         return {"imgs": imgs,                       # list of imgs: (Nv C H W)
                 "proj_matrices": proj_matrices_ms,  # dict: 4 stages of (Nv 2 4 4)
