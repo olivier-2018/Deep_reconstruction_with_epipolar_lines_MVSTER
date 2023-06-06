@@ -1103,24 +1103,36 @@ class stagenet(nn.Module):
         
         # step 3. regularization
         attn_weight = regnet(cor_feats)  # B D H W
-        del cor_feats
-        attn_weight = F.softmax(attn_weight, dim=1)  # B D H W
+        del cor_feats        
+        
         # DEBUG - plot Attention weights (proba)
         if "7" in get_powers(self.debug): # add 128
             attn_weight_img = attn_weight[0].detach().cpu().numpy() # only 1st in batch
             for dep in range(attn_weight_img.shape[0]):
-                cv2.imshow(f"[ATTN-WEIGHTS] depth:{dep}", NormalizeNumpy(attn_weight_img[dep]))
+                cv2.imshow(f"[ATTN-WEIGHTS] depth:{dep}", (attn_weight_img[dep] - np.min(attn_weight_img)) / (np.max(attn_weight_img) - np.min(attn_weight_img)))
             cv2.waitKey(0)
             cv2.destroyAllWindows()
         # END DEBUG          
+        
+        attn_weight_softmaxed = F.softmax(attn_weight, dim=1)  # B D H W
 
-        # step 4. depth argmax
-        attn_max_indices = attn_weight.max(1, keepdim=True)[1]  # B 1 H W
-        depth = torch.gather(depth_hypo, 1, attn_max_indices).squeeze(1)  # B H W
+        # step 4. depth argmax - ORIG: getting the depth hypo with the max attention 
+        # attn_max_indices = attn_weight_softmaxed.max(1, keepdim=True)[1]  # B 1 H W
+        # depth = torch.gather(depth_hypo, 1, attn_max_indices).squeeze(1)  # B H W
+        
+        # step 4. depth argmax - OLI: doing an expectation over depths hypos
+        depth = torch.mul(attn_weight_softmaxed, depth_hypo).sum(dim=1)  # B H W
 
         if not self.training:
             with torch.no_grad():
-                photometric_confidence = attn_weight.max(1)[0]  # B H W
+                # OLI
+                attn_max_indices = attn_weight_softmaxed.max(1, keepdim=True)[1]
+                # attn_weight_max = torch.gather(attn_weight_softmaxed, 1, attn_max_indices)
+                attn_weight_max = torch.gather(attn_weight, 1, attn_max_indices).squeeze(1)
+                attn_weight_sum = attn_weight.sum(1)
+                photometric_confidence = attn_weight_max / attn_weight_sum
+                
+                # photometric_confidence = attn_weight_softmaxed.max(1)[0]  # B H W  - orig
                 photometric_confidence = F.interpolate(photometric_confidence.unsqueeze(1), scale_factor=2**(3-stage_idx), mode='bilinear', align_corners=True).squeeze(1)
         else:
             photometric_confidence = torch.tensor(0.0, dtype=torch.float32, device=ref_feature.device, requires_grad=False)

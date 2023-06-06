@@ -38,7 +38,6 @@ python train_mvs4.py \
 --trainlist $TRAINLIST \
 --testlist $TESTLIST  \
 --pair_fname $PAIRFILE \
---loadckpt $CHKPT \
 --dataset=blender4 \
 --train_nviews 5 \
 --test_nviews 5 \
@@ -62,6 +61,7 @@ python train_mvs4.py \
 --inverse_depth \
 --attn_temp 2 \
 --pos_enc 2 \
+--resume \
 $PY_ARGS &> $LOG_DIR"/"$LOG_FILE &
 # $PY_ARGS | tee -a $LOG_DIR"/"$LOG_FILE 
 

@@ -13,7 +13,7 @@
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
-                "--logdir=./outputs/debug/trainDTU2",
+                "--logdir=./outputs/debug/trainDTU",
                 "--dataset=dtu_yao4",
                 "--trainpath=data/DTU/mvs_training",
                 "--trainlist=lists/dtu/train10.txt",
@@ -30,7 +30,7 @@
                 "--group_cor_dim=8,8,4,4",
                 "--epochs=1",
                 "--wd=0.001",
-                "--batch_size=6",
+                "--batch_size=1",
                 "--lr=0.00001",
                 "--fpn_base_channel=8",
                 "--l1ce_lw=0.003,1",
@@ -67,8 +67,8 @@
                 // "--testlist=lists/dtu/eval_scan9.txt",  // houses
                 // "--testlist=lists/dtu/eval_scan56.txt",  // rabbit
                 // "--testlist=lists/dtu/eval_scan59.txt", // tin can and tea
-                // "--testlist=lists/dtu/eval_scan82.txt", // strumpf
-                "--testlist=lists/dtu/eval_scan106.txt", // love birds
+                "--testlist=lists/dtu/eval_scan82.txt", // strumpf
+                // "--testlist=lists/dtu/eval_scan106.txt", // love birds
 
                 // "--pair_fname=pair_49x10.txt",
                 // "--pair_fname=eval_pair_4x3_11-12-13-14.txt", 
@@ -90,12 +90,12 @@
                 "--run_gendepth",
                 "--debug_model=0",          //1:img/FPN, 2:deppth, 4:d_hypos, 8:Attn_w 16: monodepth, 32:warped_views, 64:corr_weight, 128:Attn_weights 
                 "--NviewGen=4",
-                "--depthgen_thres=0.9",
-                "--debug_depth_gen=0",      // 1: imgs, 2: depth/masks, 4: view3Dpts, 8: Combi3Dpts, 15: ALL
+                "--depthgen_thres=0.2",
+                "--debug_depth_gen=2",      // 1: imgs, 2: depth/masks, 4: view3Dpts, 8: Combi3Dpts, 15: ALL
 
                 "--run_filter",
                 "--NviewFilter=4",
-                "--photomask=0.9" , 
+                "--photomask=0.2" , 
                 "--geomask=2",
                 "--condmask_pixel=1",
                 "--condmask_depth=0.01",
@@ -262,6 +262,7 @@
                 "--inverse_depth",
 
                 "--run_gendepth",
+                "--debug_model=0",          //1:img/FPN, 2:deppth, 4:d_hypos, 8:Attn_w 16: monodepth, 32:warped_views, 64:corr_weight, 128:Attn_weights 
                 "--NviewGen=7",
                 "--depthgen_thres=0.1",
                 "--debug_depth_gen=0",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
@@ -356,7 +357,13 @@
                 // "--pair_fname", "eval_pair_4x4_19-29-31-33.txt",
                 // "--pair_fname", "eval_pair_4x4_19-34-29-30.txt",
                 // "--pair_fname", "eval_pair_4x4_30-31-33-34.txt",
-                "--pair_fname", "eval_pair_4x4_44-45-47-48.txt",
+                // "--pair_fname", "eval_pair_4x4_44-45-47-48.txt",  // best but top row
+                "--pair_fname", "eval_pair_4x4_30-34-46-47.txt",  // 2nd best 
+                // "--pair_fname", "eval_pair_4x4_13-17-31-33.txt",        
+                // "--pair_fname", "eval_pair_4x4_0-12-19-29.txt",           
+                // "--pair_fname", "eval_pair_4x4_35-43-45-47.txt",             
+                // "--pair_fname", "eval_pair_4x4_19-29-45-47.txt",               
+                // "--pair_fname", "eval_pair_4x4_35-36-43-44.txt",                   
 
                 "--mono", 
                 "--group_cor" , 
@@ -366,6 +373,7 @@
                 "--run_gendepth",
                 "--NviewGen=4",
                 "--depthgen_thres=0.5",
+                "--debug_model=0",          //1:img/FPN, 2:deppth, 4:d_hypos, 8:Attn_w 16: monodepth, 32:warped_views, 64:corr_weight, 128:Attn_weights 
                 "--debug_depth_gen=0",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
 
                 "--run_filter",
@@ -394,10 +402,13 @@
                 // "--datapath", "data/Bin_picking/2023-02-15_setup_overhead03_mario_w_GT",             // resized to 1024x1280
                 // "--datapath", "data/Bin_picking/2022-07-15_setup_Merlin_Mario_Set_Full_to_Empty", // resized to 1024x1280
                 // "--datapath", "data/Bin_picking/acquisition-2023-02-15-13-41-55",                 // with original img size&intrinsics
-                "--datapath", "data/Bin_picking/Bin_2048x3072_merlin_calib/2023-02-15_setup_overhead03_mario_w_GT",
+
+                // "--datapath", "data/Bin_picking/Bin_2048x3072_merlin_calib/2022-09-30_setup_Merlin_Mario_Set_with_GT", // this
+                "--datapath", "data/Bin_picking/Bin_2048x3072_merlin_calib/2023-02-15_setup_overhead03_mario_w_GT", // that
                 // "--datapath", "data/Bin_picking/Bin_2048x3072_matlab_calib/2023-02-15_setup_overhead03_mario_w_GT_using_MATLAB_calib",
                 // "--datapath", "data/Bin_picking/Bin_2048x3072_matlab_calib_test/2023-02-15_setup_overhead03_mario_w_GT_using_MATLAB_calib",
  
+                // "--testlist", "lists/Bin/eval_scan7.txt",
                 // "--testlist", "lists/Bin/eval_scene1.txt",
                 // "--testlist", "lists/Bin/eval_scene2.txt",
                 "--testlist", "lists/Bin/eval_scene3.txt",
@@ -414,7 +425,8 @@
                 "--loadckpt=outputs/newBDS7_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_31.ckpt",   // "--interval_scale=1.34", 
                 "--interval_scale=1.34", 
                 "--max_h=512",
-                "--max_w=768",
+                "--max_w=640",
+                // "--max_w=768",
                 // "--max_h=1024",
                 // "--max_w=1280",
                 // "--max_h=2048",
@@ -428,7 +440,7 @@
                 "--run_gendepth",
                 "--NviewGen=4",
                 "--depthgen_thres=0.5",
-                "--debug_depth_gen=7",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
+                "--debug_depth_gen=0",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
 
                 "--run_filter",
                 "--NviewFilter=4",

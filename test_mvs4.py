@@ -864,12 +864,12 @@ def filter_depth(scene_folder):
             o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd]+o3D_cameras)
                     
             pcd = pcd.crop(bbox2) 
-            o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd])
+            o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd]+o3D_cameras)
             
             dwn_smpl = 5
             pcd = pcd.voxel_down_sample(voxel_size=dwn_smpl)
             o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd])
-            o3d.io.write_point_cloud(os.path.join(scene_folder, f"BDS9_s188_49cams_dwnsmpld_{dwn_smpl}mm.ply"), pcd.scale(0.01, (0,0,0)), write_ascii=False, compressed=False, print_progress=False)
+            o3d.io.write_point_cloud(os.path.join(scene_folder, f"fused_dwnsmpld_{dwn_smpl}mm.ply"), pcd.scale(0.01, (0,0,0)), write_ascii=False, compressed=False, print_progress=False)
         # DEBUG - END
 
 ############################################################################################################
