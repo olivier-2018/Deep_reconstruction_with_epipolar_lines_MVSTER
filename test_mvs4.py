@@ -214,6 +214,7 @@ def depth2pts_np(depth_map, cam_intrinsic, cam_extrinsic):
     R_inv = np.linalg.inv(R)
 
     world_points = np.matmul(R_inv, cam_points - t).transpose()
+    world_points[:,:2] = world_points[:,:2] * 1.0531
     return world_points
 
 def get_pixel_grids_np(height, width):
@@ -254,6 +255,7 @@ def get_o3d_frame_bbox(dims=(0.57, 0.37, 0.22), delta = (0,0,0), scale = 1, cont
             delta = (0.125, 0.09, .0)
         else:
             dims = (0.57, 0.37, 0.22)
+            # dims = (0.55, 0.36, 0.22)
             delta = (0,0,0)
                 
     # Plot axis and 3D points in WORLD ref
@@ -270,7 +272,7 @@ def get_o3d_frame_bbox(dims=(0.57, 0.37, 0.22), delta = (0,0,0), scale = 1, cont
     # Create Bounding box for bin internal walls
     min_bbox = -dims_bin / 2.0
     max_bbox = dims_bin / 2.0
-    max_bbox[2] -= min_bbox[2]
+    max_bbox[2] -= min_bbox[2] # move box upwards
     min_bbox[2] = 0 
     
     bbox = o3d.geometry.AxisAlignedBoundingBox()
