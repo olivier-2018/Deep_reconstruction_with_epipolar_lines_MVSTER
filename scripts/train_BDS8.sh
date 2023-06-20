@@ -5,6 +5,7 @@
 # 
 # Note: 
 #   bash ./scripts/train_BDS8.sh  newBDS8_512x640_N5_itvl1.34_rt20pct10srcs_posenc2
+#   bash ./scripts/train_BDS8.sh  newBDS8_512x640_N5_itvl1.34_rt20pct10srcs_posenc2_520-520
 
 
 TRAIN_DATASET="data/Blender/BDS8_mvs_train_512x640"
@@ -13,6 +14,7 @@ TESTLIST="lists/BDS8/test.txt"
 PAIRFILE="pair_49x10.txt"
 
 # CHKPT="outputs/newBDS7_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_31.ckpt"
+CHKPT="outputs/newBDS8_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_31.ckpt"
 
 exp=$1
 PY_ARGS=${@:2}
@@ -38,11 +40,11 @@ python train_mvs4.py \
 --interval_scale=1.34 \
 --ndepths="8,8,4,4" \
 --depth_inter_r="0.5,0.5,0.5,1" \
---epochs=22 \
---lr=0.001 \
+--epochs=32 \
+--lr=0.00001 \
 --wd=0.001 \
 --l1ce_lw="0.003,1" \
---lrepochs="2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,22:1.2" \
+--lrepochs="1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,22:1.2" \
 --batch_size=6 \
 --summary_freq 100 \
 --group_cor \
@@ -52,7 +54,7 @@ python train_mvs4.py \
 --inverse_depth \
 --attn_temp 2 \
 --pos_enc 2 \
---resume \
+--loadckpt $CHKPT \
 $PY_ARGS &> $LOG_DIR"/"$LOG_FILE &
 
 # --pos_enc 2 \

@@ -35,7 +35,7 @@
                 "--fpn_base_channel=8",
                 "--l1ce_lw=0.003,1",
                 "--lrepochs=4,6,8,9,10,11,12,13,14,16:2",
-                "--summary_freq=10",
+                "--summary_freq=1",
                 "--mono", 
                 "--inverse_depth",
                 "--attn_temp=2",
@@ -405,7 +405,7 @@
                 "--loadckpt=outputs/newBDS7_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_31.ckpt",   // "--interval_scale=1.34", 
                 "--train_nviews=5",
                 "--test_nviews=5",
-                "--Nlights=3:7",   //  use (-x):y to request a specific light number x to be used
+                "--Nlights=7:7",   //  use (-x):y to request a specific light number x to be used
                 "--interval_scale=1.34", 
                 "--dataloader_workers=4",
                 "--pin_m",
@@ -420,7 +420,6 @@
                 "--fpn_base_channel=8",
                 "--l1ce_lw=0.003,1" ,
                 "--lrepochs=1,2,3:2" ,
-                "--batch_size=6" ,
                 "--summary_freq=100" ,
                 "--mono",
                 "--inverse_depth",
@@ -447,7 +446,8 @@
 
                 // "--loadckpt=outputs/newBDS7_512x640_Nviews5_rt20pct10srcs/model_23.ckpt",            // "--interval_scale=1.55", 
                 // "--loadckpt=outputs/newBDS7_512x640_Nviews5_rt20pct10srcs_posenc2/model_47.ckpt",       // "--interval_scale=1.45", 
-                "--loadckpt=outputs/newBDS8_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_21.ckpt",   // "--interval_scale=1.34", 
+                // "--loadckpt=outputs/newBDS8_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_21.ckpt",   // "--interval_scale=1.34", 
+                "--loadckpt=outputs/newBDS8_512x640_N5_itvl1.34_rt20pct10srcs_posenc2_520-520/model_09.ckpt",   // "--interval_scale=1.34", 
                 "--interval_scale=1.34", 
                 "--max_h=512",
                 "--max_w=640",
@@ -455,19 +455,20 @@
                 // "--testlist", "lists/BDS8/eval_scene160.txt",
                 // "--testlist", "lists/BDS8/eval_scene170.txt",
                 // "--testlist", "lists/BDS8/eval_scene175.txt",
-                "--testlist", "lists/BDS8/eval_scene177.txt",
+                // "--testlist", "lists/BDS8/eval_scene177.txt",
                 // "--testlist", "lists/BDS8/eval_scene180.txt",  
                 // "--testlist", "lists/BDS8/eval_scene185.txt", 
+                "--testlist", "lists/BDS8/eval_scene191.txt", 
 
-                "--pair_fname", "pair_49x10.txt",
+                // "--pair_fname", "pair_49x10.txt",
                 // "--pair_fname", "eval_pair_4x4_0-1-2-3.txt",
                 // "--pair_fname", "eval_pair_4x4_2-3-11-12.txt",
                 // "--pair_fname", "eval_pair_4x4_11-12-15-16.txt",
-                // "--pair_fname", "eval_pair_4x4_19-29-31-33.txt",
+                // "--pair_fname", "eval_pair_4x4_19-29-31-33.txt", // 
                 // "--pair_fname", "eval_pair_4x4_19-34-29-30.txt",
                 // "--pair_fname", "eval_pair_4x4_30-31-33-34.txt",
                 // "--pair_fname", "eval_pair_4x4_44-45-47-48.txt",  // best but top row
-                // "--pair_fname", "eval_pair_4x4_30-34-46-47.txt",  // 2nd best 
+                "--pair_fname", "eval_pair_4x4_30-34-46-47.txt",  // 2nd best but shadow
                 // "--pair_fname", "eval_pair_4x4_13-17-31-33.txt",        
                 // "--pair_fname", "eval_pair_4x4_0-12-19-29.txt",           
                 // "--pair_fname", "eval_pair_4x4_35-43-45-47.txt",             
@@ -481,17 +482,17 @@
 
                 "--run_gendepth",
                 "--NviewGen=4",
-                "--depthgen_thres=0.5",
+                "--depthgen_thres=0.75",
                 "--debug_model=0",          //1:img/FPN, 2:deppth, 4:d_hypos, 8:Attn_w 16: monodepth, 32:warped_views, 64:corr_weight, 128:Attn_weights 
-                "--debug_depth_gen=0",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
+                "--debug_depth_gen=4",      // 1:imgs, 2:depth/masks, 4:view3Dpts, 8:Combi3Dpts, 15: ALL
 
                 "--run_filter",
                 "--NviewFilter=4",
-                "--photomask=0.5" , 
-                "--geomask=3",
+                "--photomask=0.75" , 
+                "--geomask=2",
                 "--condmask_pixel=1",
                 "--condmask_depth=0.01",
-                "--debug_depth_filter=4"    // 1: depth/masks, 2:view3Dpts, 4:Fused, 7:ALL                   
+                "--debug_depth_filter=7"    // 1: depth/masks, 2:view3Dpts, 4:Fused, 7:ALL                   
             ]
         },
         {
@@ -519,8 +520,8 @@
  
                 // "--testlist", "lists/Bin/eval_scan7.txt",
                 // "--testlist", "lists/Bin/eval_scene1.txt",
-                // "--testlist", "lists/Bin/eval_scene2.txt",
-                "--testlist", "lists/Bin/eval_scene3.txt",
+                "--testlist", "lists/Bin/eval_scene2.txt",
+                // "--testlist", "lists/Bin/eval_scene3.txt",
                 // "--testlist", "lists/Bin/eval_scene4.txt",
                 // "--testlist", "lists/Bin/eval_scene5.txt",
 
@@ -529,9 +530,10 @@
                 // "--pair_fname", "eval_pair_4x3.txt",
                 "--pair_fname", "eval_pair_4x4.txt",
 
-                // "--loadckpt=./outputs/newBDS4_512x640_rt20pct_10srcs_posenc2/model_23.ckpt" , 
-                // "--interval_scale=1.45", 
-                "--loadckpt=outputs/newBDS7_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_31.ckpt",   // "--interval_scale=1.34", 
+                // "--loadckpt=./outputs/newBDS4_512x640_rt20pct_10srcs_posenc2/model_23.ckpt" ,
+                // "--loadckpt=outputs/newBDS7_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_31.ckpt",   // "--interval_scale=1.34", 
+                // "--loadckpt=outputs/newBDS8_512x640_N5_itvl1.34_rt20pct10srcs_posenc2/model_21.ckpt",   // "--interval_scale=1.34", 
+                "--loadckpt=outputs/newBDS8_512x640_N5_itvl1.34_rt20pct10srcs_posenc2_520-520/model_09.ckpt",   // "--interval_scale=1.34", 
                 "--interval_scale=1.34", 
                 "--max_h=512",
                 "--max_w=640",

@@ -1134,10 +1134,10 @@ class stagenet(nn.Module):
 
         if not self.training:
             with torch.no_grad():
-                # OLI
+                # OLI - get the max weight across depth dim and normalized it 
                 photometric_confidence = attn_weight_max / attn_weight_sum
                 
-                # ORIG
+                # ORIG - Get the softmax of max depth across depth
                 # photometric_confidence = attn_weight.max(1)[0]  # B H W
                 # photometric_confidence = F.interpolate(photometric_confidence.unsqueeze(1), scale_factor=2**(3-stage_idx), mode='bilinear', align_corners=True).squeeze(1)
         else:

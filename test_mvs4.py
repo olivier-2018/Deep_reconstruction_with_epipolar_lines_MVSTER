@@ -214,7 +214,7 @@ def depth2pts_np(depth_map, cam_intrinsic, cam_extrinsic):
     R_inv = np.linalg.inv(R)
 
     world_points = np.matmul(R_inv, cam_points - t).transpose()
-    world_points[:,:2] = world_points[:,:2] * 1.0531
+    # world_points[:,:2] = world_points[:,:2] * 1.0531
     return world_points
 
 def get_pixel_grids_np(height, width):
@@ -398,6 +398,7 @@ def save_scene_depth(testlist):
     vertices = []
     vertices_colors = []
     cam_extrinsics = []
+    avg_gen_time = []
         
     # Eval
     total_time = 0
@@ -423,6 +424,7 @@ def save_scene_depth(testlist):
                                                                                      test_dataset.metas[batch_idx][2][:args.NviewGen-1],
                                                                                      end_time - start_time
                                                                                      ))
+            avg_gen_time.append(end_time - start_time)
             sys.stdout.flush()
             
             # save depth maps and confidence maps (zip useful only if batch not = 1)
@@ -594,6 +596,9 @@ def save_scene_depth(testlist):
 
     torch.cuda.empty_cache()
     gc.collect()
+    
+    print(f"Averaged generation time: {np.average(avg_gen_time)}")
+    
     return total_time, len(TestImgLoader)
 
 
@@ -676,6 +681,7 @@ def filter_depth(scene_folder):
     vertices = []
     vertices_colors = []
     cam_extrinsics = []
+    avg_filter_time = []
 
     # Read pair file 
     if args.dataset_name == "bin":
@@ -747,6 +753,7 @@ def filter_depth(scene_folder):
                                                                                                 geo_mask.mean()*100, 
                                                                                                 final_mask.mean()*100,
                                                                                                 time.time()-start_time))
+        avg_filter_time.append(time.time()-start_time)
         
         os.makedirs(os.path.join(scene_folder, "mask"), exist_ok=True)
         save_mask(os.path.join(scene_folder, "mask/{:0>8}_photo.png".format(ref_view)), photo_mask)
@@ -865,14 +872,26 @@ def filter_depth(scene_folder):
         else:
             o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd]+o3D_cameras)
                     
-            pcd = pcd.crop(bbox2) 
-            o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd]+o3D_cameras)
+            pcd = pcd.crop(bbox2)             
+            o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd])
+            
+            pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=15, std_ratio=2)
+            # pcd, _ = pcd.remove_radius_outlier(nb_points=2, radius=2.1)
+            o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd])      
+              
+            pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=15, std_ratio=2)
+            o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd]+o3D_cameras)    
+                                    
             
             dwn_smpl = 5
-            pcd = pcd.voxel_down_sample(voxel_size=dwn_smpl)
+            pcd_fname = f"fused_dwnsmpld_{dwn_smpl}mm.ply"
+            pcd = pcd.voxel_down_sample(voxel_size=dwn_smpl)          
             o3d.visualization.draw_geometries([frame]+[bbox]+[bbox2]+[pcd])
-            o3d.io.write_point_cloud(os.path.join(scene_folder, f"fused_dwnsmpld_{dwn_smpl}mm.ply"), pcd.scale(0.01, (0,0,0)), write_ascii=False, compressed=False, print_progress=False)
+
+            o3d.io.write_point_cloud(os.path.join(scene_folder, pcd_fname), pcd.scale(0.01, (0,0,0)), write_ascii=False, compressed=False, print_progress=False)
+            print("saving model to", pcd_fname)
         # DEBUG - END
+    print(f"Averaged filter time: {np.average(avg_filter_time)}")
 
 ############################################################################################################
 
