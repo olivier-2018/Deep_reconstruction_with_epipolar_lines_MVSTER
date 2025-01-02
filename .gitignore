@@ -5,3 +5,4 @@ checkpoints/
 debug_figs/
 *__pycache__
 data/
+.python-version

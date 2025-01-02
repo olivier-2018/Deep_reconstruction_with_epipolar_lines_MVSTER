@@ -1,1 +1,0 @@
-tensorboard --logdir train_mid_trial/ --bind_all
