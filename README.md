@@ -1,17 +1,20 @@
-# 3D scene reconstruction using low cost cameras
+# 3D scene reconstruction with reduced number of low cost cameras
 
 This repository investigates the feasibility to use low-number of low-cost black & white cameras for of 3D scene reconstruction for bin-picking applications.
 
-The core deep learning algorithm is based on MVSTER (2022).  
+The core deep learning algorithm is based on MVSTER (2022) with the following concept and arcitecture.. 
+
+**Concept:**   
+- Leverages cross-attention along epipolar lines to build data-dependent correlations in the depth dimension
+- The source image feature acts as a key and its corresponding depth map acts as the value
+- The reference feature is then leveraged as the query
 
 ![Model architecture](pictures/MVSTER_arch.png)
-
 
 The following improvements were implemented:
 - code quantization to reduce memory footprint
 - set of debugging flags to plot intermediate features, depth maps and reconstructions
 - Full control of evaluation parameters such as number of reconstruction views, number filters, number photometric and geometric masks, condition filtering, etc
-
 
 ## Requirements
 
